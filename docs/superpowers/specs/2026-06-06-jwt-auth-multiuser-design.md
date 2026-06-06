@@ -294,7 +294,51 @@ enroll/disable, recovery codes).
 - Logout control; share toggle on chats; read-only rendering for non-owner
   shared chats.
 
-## 11. Open Risks / Notes
+### UI consistency + mobile (mandatory for all auth UI)
+
+All new screens (login, invite-accept, account/2FA, admin panel) MUST match the
+existing Vane design language and be mobile-friendly. Concretely:
+
+- **Theme tokens:** use Tailwind theme colors `light-primary`/`light-secondary`
+  and `dark-primary`/`dark-secondary` (defined in `tailwind.config.ts`), accent
+  `#24A0ED`, border tokens `light-200`/`dark-200`. Support light + dark via the
+  existing `next-themes` `class` strategy — never hardcode raw hex backgrounds.
+- **Components:** reuse existing primitives — `@headlessui/react` `Dialog`/
+  `DialogPanel` (as in `SettingsDialogue.tsx`), `lucide-react` icons,
+  `framer-motion` for transitions, `sonner` `toast` for feedback, and the shared
+  `ui/` components (`Select`, `Loader`). Match `SettingsDialogue.tsx` layout
+  patterns for the admin panel (sidebar sections + content pane that collapses
+  to a single column on mobile).
+- **Typography:** Montserrat (already the app font) for body; the
+  Instrument/PP-Editorial display fonts only where the app already uses them
+  (e.g. welcome screens).
+- **Responsiveness:** layouts must work from 320px up. Use the app's existing
+  responsive breakpoints (`md:`, `xl:`). Forms single-column on mobile; the admin
+  panel collapses its section nav into the content flow on small screens, mirroring
+  `SettingsButtonMobile.tsx`. Touch targets ≥ 40px.
+- **Login/invite screens** follow the full-screen centered pattern used by
+  `SetupWizard.tsx` (`bg-light-primary dark:bg-dark-primary` full-viewport,
+  centered card).
+
+## 11. API Documentation (mandatory for all auth endpoints)
+
+Every phase that adds HTTP endpoints MUST document them in `docs/API/` before the
+phase is considered complete. Create and maintain `docs/API/AUTH.md` matching the
+existing `docs/API/SEARCH.md` style:
+
+- Group by area: Authentication, Account, Invitations, Admin.
+- For each endpoint: method + path, full-URL example, purpose, request body
+  (JSON example + per-field parameter list), response example(s), and an
+  Error Handling list of status codes (400/401/403/404/409/500) with meaning.
+- Document cookie behavior (httpOnly access + refresh, adaptive `Secure`) and the
+  401→refresh→retry contract once, in an overview section.
+- Note auth requirements per endpoint (public / authenticated / admin-only) and
+  the 2FA `mfaRequired` two-step login response.
+
+Each later phase-plan includes an explicit task to update `docs/API/AUTH.md` for
+the endpoints it introduces. Phase 1 adds no endpoints, so it touches no API docs.
+
+## 12. Open Risks / Notes
 
 - `jose` HS256 secret rotation invalidates all access tokens (acceptable;
   refresh forces re-login).

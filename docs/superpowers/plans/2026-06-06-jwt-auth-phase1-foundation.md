@@ -21,7 +21,14 @@ This plan covers **Phase 1 only**. Each later phase gets its own plan file, writ
 5. **Data scoping + sharing** — `userId` ownership on every chat/message query, share toggle, read-only shared view.
 6. **Admin surface + password reset** — user management UI, admin password reset + force-change gate.
 
+**Cross-cutting requirements every later phase-plan MUST include as explicit tasks** (spec §10–11):
+
+- **API docs:** any phase adding endpoints adds/updates `docs/API/AUTH.md` (style of `docs/API/SEARCH.md`) — method/path, request+response examples, per-field params, status codes, auth requirement. Created in Phase 2.
+- **UI consistency + mobile:** login, invite, account, and admin screens use existing theme tokens (`light/dark-primary|secondary`, accent `#24A0ED`), `@headlessui/react` `Dialog`, `lucide-react`, `framer-motion`, `sonner`, shared `ui/` primitives; light+dark via `next-themes`; responsive from 320px (`md:`/`xl:`), single-column forms on mobile, admin panel mirrors `SettingsDialogue.tsx` collapse behavior.
+
 Spec: `docs/superpowers/specs/2026-06-06-jwt-auth-multiuser-design.md`.
+
+Phase 1 adds no endpoints and no UI, so it touches neither `docs/API/` nor any screen — these requirements bind Phases 2-6.
 
 ---
 
