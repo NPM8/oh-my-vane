@@ -11,12 +11,13 @@ import configManager from '@/lib/config';
 import SetupWizard from '@/components/Setup/SetupWizard';
 import { ChatProvider } from '@/lib/hooks/useChat';
 import { cookies, headers } from 'next/headers';
-import { countUsers } from '@/lib/auth/users';
+import { countUsers, getUserById } from '@/lib/auth/users';
 import { verifyJwt } from '@/lib/auth/jwt';
 import { getAuthConfig } from '@/lib/auth/authConfig';
 import { ACCESS_COOKIE } from '@/lib/auth/cookies';
 import Login from '@/components/Auth/Login';
 import BootstrapAdmin from '@/components/Auth/BootstrapAdmin';
+import Force2FA from '@/components/Auth/Force2FA';
 
 const montserrat = Montserrat({
   weight: ['300', '400', '500', '700'],
@@ -39,28 +40,39 @@ export default async function RootLayout({
   const configSections = configManager.getUIConfigSections();
 
   const userCount = await countUsers();
-  let authed = false;
+  let authedUser: { id: string; totpEnabled: boolean } | null = null;
   if (userCount > 0) {
     const token = (await cookies()).get(ACCESS_COOKIE)?.value;
     if (token) {
       try {
-        await verifyJwt(token, getAuthConfig().secret, 'access');
-        authed = true;
+        const claims = await verifyJwt(token, getAuthConfig().secret, 'access');
+        const row = await getUserById(claims.sub);
+        if (row && !row.disabled) {
+          authedUser = { id: row.id, totpEnabled: row.totpEnabled };
+        }
       } catch {
-        authed = false;
+        authedUser = null;
       }
     }
   }
+  const authed = authedUser !== null;
 
   const pathname = (await headers()).get('x-vane-pathname') || '';
   const isPublicPage =
     pathname.startsWith('/invite') || pathname === '/login';
+
+  const requireTwoFactor = Boolean(
+    configManager.getConfig('auth.requireTwoFactor', false),
+  );
+  const needsEnroll =
+    authed && requireTwoFactor && !authedUser!.totpEnabled && !isPublicPage;
 
   const renderGate = () => {
     if (!setupComplete) return <SetupWizard configSections={configSections} />;
     if (userCount === 0) return <BootstrapAdmin />;
     if (!authed && !isPublicPage) return <Login />;
     if (!authed && isPublicPage) return children;
+    if (needsEnroll && pathname !== '/account') return <Force2FA />;
     return (
       <ChatProvider>
         <Sidebar>{children}</Sidebar>
