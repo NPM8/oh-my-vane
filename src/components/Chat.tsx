@@ -7,7 +7,7 @@ import MessageBoxLoading from './MessageBoxLoading';
 import { useChat } from '@/lib/hooks/useChat';
 
 const Chat = () => {
-  const { sections, loading, messageAppeared, messages } = useChat();
+  const { sections, loading, messageAppeared, messages, readOnly } = useChat();
 
   const [dividerWidth, setDividerWidth] = useState(0);
   const dividerRef = useRef<HTMLDivElement | null>(null);
@@ -98,7 +98,13 @@ const Chat = () => {
                 'linear-gradient(to top, #0d1117 0%, #0d1117 35%, rgba(13,17,23,0.95) 45%, rgba(13,17,23,0.85) 55%, rgba(13,17,23,0.7) 65%, rgba(13,17,23,0.5) 75%, rgba(13,17,23,0.3) 85%, rgba(13,17,23,0.1) 92%, transparent 100%)',
             }}
           />
-          <MessageInput />
+          {readOnly ? (
+            <div className="w-full max-w-screen-md mx-auto px-4 py-4 text-center text-sm text-black/60 dark:text-white/60 border-t border-light-200 dark:border-dark-200">
+              You are viewing a shared chat. It is read-only.
+            </div>
+          ) : (
+            <MessageInput />
+          )}
         </div>
       )}
     </div>

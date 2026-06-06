@@ -9,6 +9,9 @@ import db from '@/lib/db';
 import { eq } from 'drizzle-orm';
 import { chats } from '@/lib/db/schema';
 import UploadManager from '@/lib/uploads/manager';
+import { NextRequest } from 'next/server';
+import { getAuthUser } from '@/lib/auth/getAuthUser';
+import { isChatOwner } from '@/lib/auth/chatAccess';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -73,6 +76,7 @@ const ensureChatExists = async (input: {
   sources: SearchSources[];
   query: string;
   fileIds: string[];
+  userId: string;
 }) => {
   try {
     const exists = await db.query.chats
@@ -84,6 +88,7 @@ const ensureChatExists = async (input: {
     if (!exists) {
       await db.insert(chats).values({
         id: input.id,
+        userId: input.userId,
         createdAt: new Date().toISOString(),
         sources: input.sources,
         title: input.query,
@@ -100,7 +105,7 @@ const ensureChatExists = async (input: {
   }
 };
 
-export const POST = async (req: Request) => {
+export const POST = async (req: NextRequest) => {
   try {
     const reqBody = (await req.json()) as Body;
 
@@ -123,6 +128,19 @@ export const POST = async (req: Request) => {
         },
         { status: 400 },
       );
+    }
+
+    const user = await getAuthUser(req);
+    if (!user) {
+      return Response.json({ message: 'Unauthorized' }, { status: 401 });
+    }
+
+    // If the chat already exists, only its owner may append to it.
+    const existingChat = await db.query.chats.findFirst({
+      where: eq(chats.id, message.chatId),
+    });
+    if (existingChat && !isChatOwner(existingChat, user.id)) {
+      return Response.json({ message: 'Chat not found' }, { status: 404 });
     }
 
     const registry = new ModelRegistry();
@@ -230,6 +248,7 @@ export const POST = async (req: Request) => {
       sources: body.sources as SearchSources[],
       fileIds: body.files,
       query: body.message.content,
+      userId: user.id,
     });
 
     req.signal.addEventListener('abort', () => {

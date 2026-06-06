@@ -1,4 +1,12 @@
-import { Clock, Edit, Share, Trash, FileText, FileDown } from 'lucide-react';
+import {
+  Clock,
+  Edit,
+  Share,
+  Trash,
+  FileText,
+  FileDown,
+  Link as LinkIcon,
+} from 'lucide-react';
 import { Message } from './ChatWindow';
 import { useEffect, useState, Fragment } from 'react';
 import { formatTimeDifference } from '@/lib/utils';
@@ -12,6 +20,7 @@ import {
 import jsPDF from 'jspdf';
 import { useChat, Section } from '@/lib/hooks/useChat';
 import { SourceBlock } from '@/lib/types';
+import { toast } from 'sonner';
 
 const downloadFile = (filename: string, content: string, type: string) => {
   const blob = new Blob([content], { type });
@@ -200,7 +209,7 @@ const Navbar = () => {
   const [title, setTitle] = useState<string>('');
   const [timeAgo, setTimeAgo] = useState<string>('');
 
-  const { sections, chatId } = useChat();
+  const { sections, chatId, readOnly, shared, toggleShared } = useChat();
 
   useEffect(() => {
     if (sections.length > 0 && sections[0].message) {
@@ -257,6 +266,38 @@ const Navbar = () => {
           </div>
 
           <div className="flex items-center gap-1 min-w-0">
+            {!readOnly && (
+              <button
+                onClick={async () => {
+                  const wasShared = shared;
+                  await toggleShared();
+                  if (!wasShared) {
+                    try {
+                      await navigator.clipboard.writeText(
+                        window.location.href,
+                      );
+                      toast.success('Sharing on — link copied');
+                    } catch {
+                      toast.success('Sharing enabled');
+                    }
+                  } else {
+                    toast.success('Sharing disabled');
+                  }
+                }}
+                className="p-2 rounded-lg hover:bg-light-secondary dark:hover:bg-dark-secondary transition-colors duration-200"
+                title={
+                  shared ? 'Sharing on — click to disable' : 'Share this chat'
+                }
+                aria-label="Toggle chat sharing"
+              >
+                <LinkIcon
+                  className={
+                    shared ? 'text-[#24A0ED]' : 'text-black/60 dark:text-white/60'
+                  }
+                  size={16}
+                />
+              </button>
+            )}
             <Popover className="relative">
               <PopoverButton className="p-2 rounded-lg hover:bg-light-secondary dark:hover:bg-dark-secondary transition-colors duration-200">
                 <Share size={16} className="text-black/60 dark:text-white/60" />

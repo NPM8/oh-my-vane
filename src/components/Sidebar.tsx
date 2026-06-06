@@ -9,10 +9,11 @@ import {
   Settings,
   Plus,
   ArrowLeft,
+  ShieldCheck,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useSelectedLayoutSegments } from 'next/navigation';
-import React, { useState, type ReactNode } from 'react';
+import React, { useState, useEffect, type ReactNode } from 'react';
 import Layout from './Layout';
 import {
   Description,
@@ -29,6 +30,14 @@ const VerticalIconContainer = ({ children }: { children: ReactNode }) => {
 const Sidebar = ({ children }: { children: React.ReactNode }) => {
   const segments = useSelectedLayoutSegments();
   const [isOpen, setIsOpen] = useState<boolean>(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/auth/session')
+      .then((r) => r.json())
+      .then((d) => setIsAdmin(d.user?.role === 'admin'))
+      .catch(() => {});
+  }, []);
 
   const navLinks = [
     {
@@ -99,6 +108,42 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
                 </p>
               </Link>
             ))}
+            {isAdmin && (
+              <Link
+                href="/admin"
+                className={cn(
+                  'relative flex flex-col items-center justify-center space-y-0.5 cursor-pointer w-full py-2 rounded-lg',
+                  segments.includes('admin')
+                    ? 'text-black/70 dark:text-white/70 '
+                    : 'text-black/60 dark:text-white/60',
+                )}
+              >
+                <div
+                  className={cn(
+                    segments.includes('admin') && 'bg-light-200 dark:bg-dark-200',
+                    'group rounded-lg hover:bg-light-200 hover:dark:bg-dark-200 transition duration-200',
+                  )}
+                >
+                  <ShieldCheck
+                    size={25}
+                    className={cn(
+                      !segments.includes('admin') && 'group-hover:scale-105',
+                      'transition duration:200 m-1.5',
+                    )}
+                  />
+                </div>
+                <p
+                  className={cn(
+                    segments.includes('admin')
+                      ? 'text-black/80 dark:text-white/80'
+                      : 'text-black/60 dark:text-white/60',
+                    'text-[10px]',
+                  )}
+                >
+                  Admin
+                </p>
+              </Link>
+            )}
           </VerticalIconContainer>
 
           <SettingsButton />
@@ -124,6 +169,23 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
             <p className="text-xs">{link.label}</p>
           </Link>
         ))}
+        {isAdmin && (
+          <Link
+            href="/admin"
+            className={cn(
+              'relative flex flex-col items-center space-y-1 text-center w-full',
+              segments.includes('admin')
+                ? 'text-black dark:text-white'
+                : 'text-black dark:text-white/70',
+            )}
+          >
+            {segments.includes('admin') && (
+              <div className="absolute top-0 -mt-4 h-1 w-full rounded-b-lg bg-black dark:bg-white" />
+            )}
+            <ShieldCheck />
+            <p className="text-xs">Admin</p>
+          </Link>
+        )}
       </div>
 
       <Layout>{children}</Layout>

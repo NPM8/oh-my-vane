@@ -11,6 +11,10 @@ import { TextBlock } from '@/lib/types';
 import { getTokenCount } from '@/lib/utils/splitText';
 
 class SearchAgent {
+  // SECURITY INVARIANT: callers MUST verify the authenticated user owns `chatId`
+  // before invoking this — message writes/deletes here are keyed only on
+  // chatId/messageId and perform no ownership check of their own.
+  // (Enforced today by the owner guard in POST /api/chat.)
   async searchAsync(session: SessionManager, input: SearchAgentInput) {
     const exists = await db.query.messages.findFirst({
       where: and(

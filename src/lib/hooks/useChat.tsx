@@ -40,6 +40,9 @@ type ChatContext = {
   isMessagesLoaded: boolean;
   loading: boolean;
   notFound: boolean;
+  readOnly: boolean;
+  shared: boolean;
+  toggleShared: () => Promise<void>;
   messageAppeared: boolean;
   isReady: boolean;
   hasError: boolean;
@@ -180,6 +183,8 @@ const loadMessages = async (
   setNotFound: (notFound: boolean) => void,
   setFiles: (files: File[]) => void,
   setFileIds: (fileIds: string[]) => void,
+  setReadOnly: (v: boolean) => void,
+  setShared: (v: boolean) => void,
 ) => {
   const res = await fetch(`/api/chats/${chatId}`, {
     method: 'GET',
@@ -195,6 +200,9 @@ const loadMessages = async (
   }
 
   const data = await res.json();
+
+  setReadOnly(Boolean(data.readOnly));
+  setShared(Boolean(data.chat?.shared));
 
   const messages = data.messages as Message[];
 
@@ -252,6 +260,9 @@ export const chatContext = createContext<ChatContext>({
   messages: [],
   sections: [],
   notFound: false,
+  readOnly: false,
+  shared: false,
+  toggleShared: async () => {},
   optimizationMode: '',
   chatModelProvider: { key: '', providerId: '' },
   embeddingModelProvider: { key: '', providerId: '' },
@@ -293,6 +304,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
   const [isMessagesLoaded, setIsMessagesLoaded] = useState(false);
 
   const [notFound, setNotFound] = useState(false);
+
+  const [readOnly, setReadOnly] = useState(false);
+  const [shared, setShared] = useState(false);
 
   const [chatModelProvider, setChatModelProvider] = useState<ChatModelProvider>(
     {
@@ -499,6 +513,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         setNotFound,
         setFiles,
         setFileIds,
+        setReadOnly,
+        setShared,
       );
     } else if (!chatId) {
       setNewChatCreated(true);
@@ -805,6 +821,22 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const toggleShared = async () => {
+    if (!chatId) return;
+    const next = !shared;
+    try {
+      const res = await fetch(`/api/chats/${chatId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shared: next }),
+      });
+      if (!res.ok) throw new Error('Failed to update sharing');
+      setShared(next);
+    } catch {
+      toast.error('Failed to update sharing');
+    }
+  };
+
   return (
     <chatContext.Provider
       value={{
@@ -821,6 +853,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         loading,
         messageAppeared,
         notFound,
+        readOnly,
+        shared,
+        toggleShared,
         optimizationMode,
         setFileIds,
         setFiles,

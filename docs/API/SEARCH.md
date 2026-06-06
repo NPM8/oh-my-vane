@@ -4,6 +4,75 @@
 
 Vane's Search API makes it easy to use our AI-powered search engine. You can run different types of searches, pick the models you want to use, and get the most recent info. Follow the following headings to learn more about Vane's search API.
 
+## Access & Sharing
+
+All chat endpoints require an authenticated session. Requests must carry the session cookie issued at login; unauthenticated requests receive **401 Unauthorized**. See [AUTH.md](./AUTH.md) for how to obtain a session.
+
+Chats are **private to their owner** by default. The following rules govern access:
+
+- **`GET /api/chats`** returns **only the calling user's own chats**, ordered newest first. Other users' chats (including shared ones) are never listed here.
+- **`GET /api/chats/:id`** returns a chat if the caller **owns it** _or_ the chat is **shared**. Otherwise it responds **404** — a chat the caller cannot view is indistinguishable from one that does not exist. The response includes a `readOnly` boolean that is `true` when a non-owner is viewing a shared chat.
+- **`PATCH /api/chats/:id`** with body `{ "shared": boolean }` toggles sharing on a chat. **Owner only** — non-owners (and unknown chat IDs) get **404**. On success it returns **200** with `{ "ok": true, "shared": <boolean> }`.
+- A **shared** chat is viewable **read-only** by any logged-in user via its URL (`/c/:chatId`). Non-owners cannot append messages, rename, delete, or re-share it.
+- **`DELETE /api/chats/:id`** is **owner only**; non-owners (and unknown chat IDs) get **404**.
+- **`POST /api/chat`** (the streaming ask endpoint) stamps the **caller as the owner** of any new chat it creates. Appending to an **existing** chat requires ownership — if the chat exists and the caller is not its owner, the request gets **404**.
+
+### Sharing example — `PATCH /api/chats/:id`
+
+Request (owner enabling sharing):
+
+```json
+{
+  "shared": true
+}
+```
+
+Response (**200**):
+
+```json
+{
+  "ok": true,
+  "shared": true
+}
+```
+
+A non-owner (or unknown chat ID) instead receives **404**:
+
+```json
+{
+  "message": "Chat not found"
+}
+```
+
+### Reading a chat — `GET /api/chats/:id`
+
+Response shape (non-owner viewing a shared chat — note `readOnly: true`):
+
+```json
+{
+  "chat": {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "title": "What is Vane",
+    "createdAt": "2026-06-06T10:15:00.000Z",
+    "userId": "11111111-2222-3333-4444-555555555555",
+    "shared": true,
+    "sources": ["web"],
+    "files": []
+  },
+  "messages": [
+    {
+      "id": 1,
+      "chatId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "role": "user",
+      "content": "What is Vane?"
+    }
+  ],
+  "readOnly": true
+}
+```
+
+When the **owner** reads the same chat, the shape is identical except `readOnly` is `false`.
+
 ## Endpoints
 
 ### Get Available Providers and Models
