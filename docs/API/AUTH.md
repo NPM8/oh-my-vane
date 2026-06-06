@@ -274,6 +274,283 @@ current auth state. When there is no valid session, it returns `200` with a
 
 ---
 
+## Invitations
+
+Invitations let an administrator generate single-use, time-limited tokens that
+allow a new person to create an account. An admin mints an invite (optionally
+choosing the new account's role and how long the invite stays valid) and shares
+the resulting link. The invitee opens the link, validates it, and accepts it by
+choosing a username and password — which creates their account and logs them in
+immediately.
+
+### Authorization
+
+All `/api/admin/*` routes require an authenticated **admin**:
+
+- **`401 Unauthorized`** if the request has no valid session.
+- **`403 Forbidden`** if the session belongs to a non-admin user.
+
+This rule is enforced **twice** — once in `src/middleware.ts` (which guards the
+`/api/admin/*` prefix) and again inside each route handler via `requireAdmin`.
+The public invite routes (`/api/auth/invite/*`) require no authentication.
+
+---
+
+### Create Invitation
+
+#### **POST** `/api/admin/invites`
+
+**Full URL**: `http://localhost:3000/api/admin/invites`
+
+**Admin only.** Creates a new invitation and returns it together with a
+shareable link. The raw invite token is generated server-side, hashed before
+storage, and returned **only once** — embedded in the `link` of this response.
+It can never be retrieved again afterwards.
+
+#### Request Body
+
+```json
+{
+  "role": "user",
+  "ttlHours": 48
+}
+```
+
+#### Request Parameters
+
+- **`role`** (string, optional): The role the accepted account will receive.
+  One of `user` or `admin`. Defaults to `user`.
+- **`ttlHours`** (integer, optional): How many hours the invitation remains
+  valid, from creation. Must be an integer **1–720** (1 hour to 30 days).
+  Defaults to `48`.
+
+#### Response Example (201 Created)
+
+```json
+{
+  "invite": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "role": "user",
+    "createdBy": "11111111-1111-1111-1111-111111111111",
+    "expiresAt": "2026-06-08T12:00:00.000Z",
+    "usedAt": null,
+    "usedBy": null,
+    "createdAt": "2026-06-06T12:00:00.000Z"
+  },
+  "link": "http://localhost:3000/invite/<rawToken>"
+}
+```
+
+The `link` is `${origin}/invite/<rawToken>`, where `origin` is derived from the
+request URL. The raw token appears **only** in this `link` and is never returned
+again.
+
+#### Error Handling
+
+- **400**: The invite options are invalid (e.g. an unknown `role` or a
+  `ttlHours` outside `1–720`).
+- **401**: The request is not authenticated.
+- **403**: The authenticated user is not an admin.
+- **500**: An internal server error occurred.
+
+---
+
+### List Invitations
+
+#### **GET** `/api/admin/invites`
+
+**Full URL**: `http://localhost:3000/api/admin/invites`
+
+**Admin only.** Returns all invitations, newest first. Each invite carries a
+computed `status`. The raw token and its hash (`tokenHash`) are **never**
+returned by this endpoint.
+
+This endpoint takes **no request body**.
+
+#### Response Example (200 OK)
+
+```json
+{
+  "invites": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "role": "user",
+      "createdBy": "11111111-1111-1111-1111-111111111111",
+      "expiresAt": "2026-06-08T12:00:00.000Z",
+      "usedAt": null,
+      "usedBy": null,
+      "createdAt": "2026-06-06T12:00:00.000Z",
+      "status": "pending"
+    }
+  ]
+}
+```
+
+#### Response Fields
+
+- **`status`** (string): One of:
+  - `used` — the invite has been accepted or revoked (`usedAt` is set).
+  - `expired` — the invite's `expiresAt` has passed and it was never used.
+  - `pending` — the invite is still unused and unexpired.
+
+Note: a revoked invite reports `status: "used"` (revocation marks the invite as
+used, with `usedBy` set to `"revoked"`).
+
+#### Error Handling
+
+- **401**: The request is not authenticated.
+- **403**: The authenticated user is not an admin.
+- **500**: An internal server error occurred.
+
+---
+
+### Revoke Invitation
+
+#### **DELETE** `/api/admin/invites/:id`
+
+**Full URL**: `http://localhost:3000/api/admin/invites/<id>`
+
+**Admin only.** Revokes an unused invitation by marking it used (`usedBy` is set
+to `"revoked"`). This is a no-op if the invite is already used, and the response
+is the same regardless. This endpoint takes **no request body**.
+
+#### Request Parameters
+
+- **`id`** (path, required): The `id` of the invite to revoke.
+
+#### Response Example (200 OK)
+
+```json
+{
+  "ok": true
+}
+```
+
+#### Error Handling
+
+- **401**: The request is not authenticated.
+- **403**: The authenticated user is not an admin.
+- **500**: An internal server error occurred.
+
+---
+
+### Validate Invitation
+
+#### **POST** `/api/auth/invite/validate`
+
+**Full URL**: `http://localhost:3000/api/auth/invite/validate`
+
+**Public.** Checks whether an invite token is currently usable, without
+consuming it. Intended for the invite-acceptance page to show the invitee the
+state of their link before they fill in the form. This endpoint always returns
+`200` (except on internal error); the outcome is conveyed in the body.
+
+#### Request Body
+
+```json
+{
+  "token": "<rawToken>"
+}
+```
+
+#### Request Parameters
+
+- **`token`** (string, required): The raw invite token (the value from the
+  invite link). Must be non-empty.
+
+#### Response Example — Valid (200 OK)
+
+```json
+{
+  "valid": true,
+  "role": "user"
+}
+```
+
+#### Response Example — Invalid (200 OK)
+
+```json
+{
+  "valid": false,
+  "reason": "expired"
+}
+```
+
+- **`reason`** (string): One of:
+  - `unknown` — no invite matches the token.
+  - `used` — the invite has already been used (or revoked).
+  - `expired` — the invite's validity window has passed.
+
+If the request body is malformed or the token is missing/empty, the endpoint
+returns `200` with `{ "valid": false }` and **no** `reason`.
+
+#### Error Handling
+
+- **500**: An internal server error occurred.
+
+---
+
+### Accept Invitation
+
+#### **POST** `/api/auth/invite/accept`
+
+**Full URL**: `http://localhost:3000/api/auth/invite/accept`
+
+**Public.** Consumes a valid invite to create a new account and immediately logs
+the new user in (both auth cookies are set on the response). Acceptance is
+**single-use**: the invite is atomically claimed, so a token cannot be used to
+create more than one account.
+
+#### Request Body
+
+```json
+{
+  "token": "<rawToken>",
+  "username": "newuser",
+  "password": "a-strong-password"
+}
+```
+
+#### Request Parameters
+
+- **`token`** (string, required): The raw invite token. Must be non-empty.
+- **`username`** (string, required): The desired username. Must be **3–64**
+  characters.
+- **`password`** (string, required): The desired password. Must be **10–200**
+  characters.
+
+#### Response Example (201 Created)
+
+```json
+{
+  "user": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "username": "newuser",
+    "role": "user",
+    "disabled": false,
+    "totpEnabled": false,
+    "mustChangePassword": false
+  }
+}
+```
+
+The new account receives the `role` recorded on the invite. The `vane_access`
+and `vane_refresh` cookies are set on the response, so the user is logged in
+without a separate login step.
+
+#### Error Handling
+
+- **400**: The input failed validation (bad/missing `token`, or `username`/
+  `password` out of range), **or** the invite is invalid, expired, or already
+  used. The message is intentionally generic
+  (`"This invitation is invalid or has already been used."`) for the
+  invite-state case.
+- **409**: The requested username is already taken. This is checked **before**
+  the invite is consumed, so the invite is not spent on a duplicate username.
+- **500**: An internal server error occurred.
+
+---
+
 ## Security Notes
 
 - **Password hashing**: Passwords are hashed with **argon2id** and never stored
