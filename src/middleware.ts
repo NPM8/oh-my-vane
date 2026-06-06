@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth/getAuthUser';
 import { countUsers } from '@/lib/auth/users';
+import configManager from '@/lib/config';
+import { getUserById } from '@/lib/auth/users';
 
 export const runtime = 'nodejs';
 
@@ -30,6 +32,22 @@ export const middleware = async (req: NextRequest) => {
   }
   if (pathname.startsWith('/api/admin/') && user.role !== 'admin') {
     return Response.json({ message: 'Forbidden' }, { status: 403 });
+  }
+
+  // When the admin requires 2FA org-wide, block data APIs for users who haven't
+  // enrolled — except /api/account/* (so they can enroll) and /api/auth/* (already
+  // public above). This makes the require-2FA gate real at the API layer, not just UI.
+  if (
+    !pathname.startsWith('/api/account/') &&
+    Boolean(configManager.getConfig('auth.requireTwoFactor', false))
+  ) {
+    const row = await getUserById(user.id);
+    if (row && !row.totpEnabled) {
+      return Response.json(
+        { message: 'Two-factor enrollment required.' },
+        { status: 403 },
+      );
+    }
   }
   return pass();
 };

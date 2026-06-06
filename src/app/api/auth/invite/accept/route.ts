@@ -4,8 +4,11 @@ import { consumeInvite } from '@/lib/auth/invites';
 import { createUser, getUserByUsername } from '@/lib/auth/users';
 import { issueSessionOnResponse } from '@/lib/auth/sessionCookies';
 import { isSecureRequest } from '@/lib/auth/cookies';
+import { createRateLimiter } from '@/lib/auth/rateLimit';
 
 export const runtime = 'nodejs';
+
+const acceptLimiter = createRateLimiter({ limit: 10, windowMs: 10 * 60 * 1000 });
 
 const schema = z.object({
   token: z.string().min(1),
@@ -15,6 +18,11 @@ const schema = z.object({
 
 export const POST = async (req: NextRequest) => {
   try {
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    if (!acceptLimiter.check(ip).allowed) {
+      return Response.json({ message: 'Too many attempts. Try again later.' }, { status: 429 });
+    }
+
     const parsed = schema.safeParse(await req.json().catch(() => ({})));
     if (!parsed.success) {
       return Response.json(

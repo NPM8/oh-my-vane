@@ -4,8 +4,11 @@ import { requireAuth } from '@/lib/auth/getAuthUser';
 import { getUserById } from '@/lib/auth/users';
 import { verifyPassword } from '@/lib/auth/password';
 import { verifyUserSecondFactor, disableTwoFactor } from '@/lib/auth/twoFactor';
+import { createRateLimiter } from '@/lib/auth/rateLimit';
 
 export const runtime = 'nodejs';
+
+const disableLimiter = createRateLimiter({ limit: 10, windowMs: 5 * 60 * 1000 });
 
 const schema = z.object({
   password: z.string().min(1),
@@ -16,6 +19,10 @@ export const POST = async (req: NextRequest) => {
   try {
     const auth = await requireAuth(req);
     if (auth instanceof Response) return auth;
+
+    if (!disableLimiter.check(auth.id).allowed) {
+      return Response.json({ message: 'Too many attempts. Try again later.' }, { status: 429 });
+    }
 
     const parsed = schema.safeParse(await req.json().catch(() => ({})));
     if (!parsed.success) {
