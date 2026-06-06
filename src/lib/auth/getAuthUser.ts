@@ -37,4 +37,16 @@ export const requireAuth = async (
   return user;
 };
 
+// Returns the user when they are an admin, otherwise a 401/403 Response.
+export const requireAdmin = async (
+  req: NextRequest,
+): Promise<AuthUser | Response> => {
+  const user = await getAuthUser(req);
+  if (!user) return Response.json({ message: 'Unauthorized' }, { status: 401 });
+  if (user.role !== 'admin') {
+    return Response.json({ message: 'Forbidden' }, { status: 403 });
+  }
+  return user;
+};
+
 export const isResponse = (v: unknown): v is Response => v instanceof Response;
