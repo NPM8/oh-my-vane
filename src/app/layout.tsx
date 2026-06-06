@@ -10,7 +10,7 @@ import ThemeProvider from '@/components/theme/Provider';
 import configManager from '@/lib/config';
 import SetupWizard from '@/components/Setup/SetupWizard';
 import { ChatProvider } from '@/lib/hooks/useChat';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { countUsers } from '@/lib/auth/users';
 import { verifyJwt } from '@/lib/auth/jwt';
 import { getAuthConfig } from '@/lib/auth/authConfig';
@@ -52,10 +52,15 @@ export default async function RootLayout({
     }
   }
 
+  const pathname = (await headers()).get('x-vane-pathname') || '';
+  const isPublicPage =
+    pathname.startsWith('/invite') || pathname === '/login';
+
   const renderGate = () => {
     if (!setupComplete) return <SetupWizard configSections={configSections} />;
     if (userCount === 0) return <BootstrapAdmin />;
-    if (!authed) return <Login />;
+    if (!authed && !isPublicPage) return <Login />;
+    if (!authed && isPublicPage) return children;
     return (
       <ChatProvider>
         <Sidebar>{children}</Sidebar>
