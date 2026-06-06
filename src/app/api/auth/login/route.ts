@@ -5,6 +5,7 @@ import { getUserByUsername } from '@/lib/auth/users';
 import { verifyPassword } from '@/lib/auth/password';
 import { issueSession } from '@/lib/auth/session';
 import { getAuthConfig } from '@/lib/auth/authConfig';
+import { signJwt } from '@/lib/auth/jwt';
 import { saveRefresh } from '@/lib/auth/refreshStore';
 import { createRateLimiter } from '@/lib/auth/rateLimit';
 import {
@@ -49,9 +50,14 @@ export const POST = async (req: NextRequest) => {
     }
     loginLimiter.reset(`${ip}:${username}`);
 
-    // Forward-compatible 2FA gate (inert until Phase 4 enables enrollment).
     if (user.totpEnabled) {
-      return Response.json({ mfaRequired: true }, { status: 200 });
+      const cfg = getAuthConfig();
+      const mfaToken = await signJwt(
+        { sub: user.id, type: 'mfa' },
+        cfg.secret,
+        '300s',
+      );
+      return Response.json({ mfaRequired: true, mfaToken }, { status: 200 });
     }
 
     const cfg = getAuthConfig();
