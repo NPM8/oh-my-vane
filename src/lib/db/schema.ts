@@ -61,7 +61,7 @@ export const users = sqliteTable('users', {
 
 export const invites = sqliteTable('invites', {
   id: text('id').primaryKey(),
-  tokenHash: text('tokenHash').notNull(),
+  tokenHash: text('tokenHash').notNull().unique(),
   role: text('role', { enum: ['admin', 'user'] })
     .notNull()
     .default('user'),
@@ -75,7 +75,7 @@ export const invites = sqliteTable('invites', {
 export const refreshTokens = sqliteTable('refresh_tokens', {
   id: text('id').primaryKey(),
   userId: text('userId').notNull(),
-  tokenHash: text('tokenHash').notNull(),
+  tokenHash: text('tokenHash').notNull().unique(),
   expiresAt: text('expiresAt').notNull(),
   revokedAt: text('revokedAt'),
   replacedBy: text('replacedBy'),

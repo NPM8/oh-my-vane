@@ -25,6 +25,8 @@ CREATE TABLE `invites` (
 	`createdAt` text NOT NULL
 );
 --> statement-breakpoint
+CREATE UNIQUE INDEX `invites_tokenHash_unique` ON `invites` (`tokenHash`);
+--> statement-breakpoint
 CREATE TABLE `refresh_tokens` (
 	`id` text PRIMARY KEY NOT NULL,
 	`userId` text NOT NULL,
@@ -34,6 +36,8 @@ CREATE TABLE `refresh_tokens` (
 	`replacedBy` text,
 	`createdAt` text NOT NULL
 );
+--> statement-breakpoint
+CREATE UNIQUE INDEX `refresh_tokens_tokenHash_unique` ON `refresh_tokens` (`tokenHash`);
 --> statement-breakpoint
 ALTER TABLE `chats` ADD `userId` text;
 --> statement-breakpoint
