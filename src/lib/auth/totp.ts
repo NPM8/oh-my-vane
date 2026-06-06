@@ -1,21 +1,23 @@
-import { generateSecret, generateURI, verifySync } from 'otplib';
+import { authenticator } from 'otplib';
 
-// Allow ±1 time step (30s) to tolerate clock drift.
-const COUNTER_TOLERANCE = 1;
+// Allow ±1 time step (30s) to tolerate clock drift between client and server.
+const TOTP_WINDOW = 1;
 
-export const generateTotpSecret = (): string => generateSecret();
+export const generateTotpSecret = (): string => authenticator.generateSecret();
 
 export const buildOtpAuthUri = (
   secret: string,
   account: string,
   issuer: string,
-): string => generateURI({ secret, label: account, issuer });
+): string => authenticator.keyuri(account, issuer, secret);
 
 export const verifyTotp = (token: string, secret: string): boolean => {
   try {
-    return verifySync({ token, secret, counterTolerance: COUNTER_TOLERANCE })
-      .valid;
+    authenticator.options = { window: TOTP_WINDOW };
+    return authenticator.check(token, secret);
   } catch {
     return false;
+  } finally {
+    authenticator.resetOptions();
   }
 };

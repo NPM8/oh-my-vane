@@ -1,10 +1,10 @@
-import { describe, it, expect } from 'vitest';
-import { generateSync } from 'otplib';
-import {
-  generateTotpSecret,
-  buildOtpAuthUri,
-  verifyTotp,
-} from '../totp';
+import { describe, it, expect, afterEach } from 'vitest';
+import { authenticator } from 'otplib';
+import { generateTotpSecret, buildOtpAuthUri, verifyTotp } from '../totp';
+
+afterEach(() => {
+  authenticator.resetOptions();
+});
 
 describe('totp', () => {
   it('generates a base32 secret', () => {
@@ -23,8 +23,17 @@ describe('totp', () => {
 
   it('verifies a code generated from the same secret', () => {
     const secret = generateTotpSecret();
-    const code = generateSync({ secret });
+    const code = authenticator.generate(secret);
     expect(verifyTotp(code, secret)).toBe(true);
+  });
+
+  it('accepts a code from the previous time step (drift tolerance)', () => {
+    const secret = generateTotpSecret();
+    // Generate a code as it would have been one 30s step in the past.
+    authenticator.options = { epoch: Date.now() - 30_000 };
+    const pastCode = authenticator.generate(secret);
+    authenticator.resetOptions();
+    expect(verifyTotp(pastCode, secret)).toBe(true);
   });
 
   it('rejects an incorrect code', () => {
