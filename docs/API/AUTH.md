@@ -556,6 +556,325 @@ without a separate login step.
 
 ---
 
+## Account
+
+Endpoints under `/api/account/*` act on the **currently authenticated user** —
+there is no `id` in the path; the account is always derived from the session
+(`vane_access` cookie). They require authentication only (any role), and return
+**`401 Unauthorized`** without a valid session. The 2FA enrollment endpoints
+([setup](#begin-2fa-enrollment), [enable](#enable-2fa),
+[disable](#disable-2fa)) also live under this prefix and are documented in the
+[Two-Factor Authentication (2FA)](#two-factor-authentication-2fa) section.
+
+> **Note:** `/api/account/*` is intentionally **never** blocked by the enforced
+> 2FA gate (see [Configuration: Enforced 2FA](#configuration-enforced-2fa)), so
+> a user who must enrol can still reach their account endpoints to do so.
+
+---
+
+### Change Own Password
+
+#### **POST** `/api/account/password`
+
+**Full URL**: `http://localhost:3000/api/account/password`
+
+**Authenticated.** Changes the password of the currently authenticated user.
+The caller must prove knowledge of the **current** password. On success, **all
+of the user's other sessions are revoked** (every refresh token for the user is
+invalidated), and the **current** session's cookies are re-issued on the
+response — so the caller stays logged in while every other device is signed
+out.
+
+#### Request Body
+
+```json
+{
+  "currentPassword": "the-old-password",
+  "newPassword": "a-new-strong-password"
+}
+```
+
+#### Request Parameters
+
+- **`currentPassword`** (string, required): The user's current password.
+  Non-empty.
+- **`newPassword`** (string, required): The desired new password. Must be
+  **10–200** characters.
+
+#### Response Example (200 OK)
+
+```json
+{
+  "ok": true
+}
+```
+
+The `vane_access` and `vane_refresh` cookies are **rotated** (re-issued) on the
+response for the current session. Because all of the user's refresh tokens were
+revoked first, any other active sessions can no longer refresh and are
+effectively logged out.
+
+#### Error Handling
+
+- **400**: The input failed validation — `currentPassword` empty or
+  `newPassword` outside `10–200` characters
+  (`"Current password and a new password (min 10) are required."`).
+- **401**: The request is not authenticated, **or** `currentPassword` is
+  incorrect (`"Current password is incorrect."`).
+- **500**: An internal server error occurred.
+
+---
+
+## User Management (admin)
+
+These endpoints live under `/api/admin/*` and require an authenticated
+**admin**, following the same authorization rule documented under
+[Invitations → Authorization](#authorization):
+
+- **`401 Unauthorized`** if the request has no valid session.
+- **`403 Forbidden`** if the session belongs to a non-admin user.
+
+That rule is enforced **twice** — in `src/middleware.ts` (which guards the
+`/api/admin/*` prefix) and again inside each handler via `requireAdmin`. The
+listing endpoint never exposes password hashes.
+
+Admins cannot operate destructively on **their own** account: disabling and
+deleting reject a request whose target `id` equals the caller's own id with
+**`400`**, so an admin cannot lock themselves out.
+
+The admin's 2FA reset endpoint
+([**POST** `/api/admin/users/:id/2fa/reset`](#admin-reset-a-users-2fa)) is part
+of this same admin surface and is documented in the
+[Two-Factor Authentication (2FA)](#two-factor-authentication-2fa) section.
+
+---
+
+### List Users
+
+#### **GET** `/api/admin/users`
+
+**Full URL**: `http://localhost:3000/api/admin/users`
+
+**Admin only.** Returns all user accounts, ordered by username. Password hashes
+are **never** included. This endpoint takes **no request body**.
+
+#### Response Example (200 OK)
+
+```json
+{
+  "users": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "username": "admin",
+      "role": "admin",
+      "disabled": false,
+      "totpEnabled": true,
+      "mustChangePassword": false
+    }
+  ]
+}
+```
+
+#### Response Fields
+
+- **`id`** (string): The user's id (UUID).
+- **`username`** (string).
+- **`role`** (string): `admin` or `user`.
+- **`disabled`** (boolean): Whether the account is disabled (cannot log in or
+  refresh).
+- **`totpEnabled`** (boolean): Whether the user has 2FA active.
+- **`mustChangePassword`** (boolean): Whether the user is forced to change their
+  password on next login (set by an admin password reset).
+
+#### Error Handling
+
+- **401**: The request is not authenticated.
+- **403**: The authenticated user is not an admin.
+- **500**: An internal server error occurred.
+
+---
+
+### Enable / Disable a User
+
+#### **POST** `/api/admin/users/:id/disable`
+
+**Full URL**: `http://localhost:3000/api/admin/users/<id>/disable`
+
+**Admin only.** Sets the target user's `disabled` flag. Despite the path name,
+this endpoint both **disables** (`disabled: true`) and **re-enables**
+(`disabled: false`) an account, depending on the request body. When an account
+is **disabled**, all of that user's sessions are revoked (every refresh token
+is invalidated) so the user is signed out immediately; re-enabling does not
+restore the old sessions.
+
+#### Request Parameters
+
+- **`id`** (path, required): The `id` of the user to enable/disable.
+
+#### Request Body
+
+```json
+{
+  "disabled": true
+}
+```
+
+- **`disabled`** (boolean, required): The desired disabled state.
+
+#### Response Example (200 OK)
+
+```json
+{
+  "ok": true,
+  "disabled": true
+}
+```
+
+#### Error Handling
+
+- **400**: The target `id` is the **caller's own** id
+  (`"You cannot disable your own account."`), **or** the body is invalid /
+  missing the `disabled` boolean (`"disabled (boolean) required."`). The own-id
+  check is performed **before** body validation.
+- **401**: The request is not authenticated.
+- **403**: The authenticated user is not an admin.
+- **404**: No user matches the given `id` (`"User not found."`).
+- **500**: An internal server error occurred.
+
+---
+
+### Delete a User
+
+#### **DELETE** `/api/admin/users/:id`
+
+**Full URL**: `http://localhost:3000/api/admin/users/<id>`
+
+**Admin only.** Permanently deletes the target user account. The user's
+sessions are revoked (every refresh token invalidated) before the account is
+removed. This endpoint takes **no request body**.
+
+#### Request Parameters
+
+- **`id`** (path, required): The `id` of the user to delete.
+
+#### Response Example (200 OK)
+
+```json
+{
+  "ok": true
+}
+```
+
+#### Error Handling
+
+- **400**: The target `id` is the **caller's own** id
+  (`"You cannot delete your own account."`).
+- **401**: The request is not authenticated.
+- **403**: The authenticated user is not an admin.
+- **404**: No user matches the given `id` (`"User not found."`).
+- **500**: An internal server error occurred.
+
+---
+
+### Reset a User's Password
+
+#### **POST** `/api/admin/users/:id/password/reset`
+
+**Full URL**: `http://localhost:3000/api/admin/users/<id>/password/reset`
+
+**Admin only.** Generates a new **temporary password** for the target user,
+sets it on the account, and marks the user `mustChangePassword`. The user's
+sessions are revoked (every refresh token invalidated), so they are signed out
+and must log in again with the temporary password — after which they are forced
+to set a new password before continuing.
+
+The temporary password is returned **only once**, in this response; it is not
+stored in plaintext and can never be retrieved again. This endpoint takes **no
+request body**.
+
+#### Request Parameters
+
+- **`id`** (path, required): The `id` of the user whose password to reset.
+
+#### Response Example (200 OK)
+
+```json
+{
+  "tempPassword": "kQ2v8nR4tLpZxWj7mB1aGc3d"
+}
+```
+
+- **`tempPassword`** (string): A randomly generated temporary password
+  (18 random bytes, base64url-encoded — about 24 characters). Communicate it to
+  the user over a trusted channel.
+
+#### Error Handling
+
+- **401**: The request is not authenticated.
+- **403**: The authenticated user is not an admin.
+- **404**: No user matches the given `id` (`"User not found."`).
+- **500**: An internal server error occurred.
+
+---
+
+## Admin Settings
+
+### Get / Set Enforced-2FA Setting
+
+#### **GET** `/api/admin/settings`
+
+**Full URL**: `http://localhost:3000/api/admin/settings`
+
+**Admin only.** Reads the org-wide enforced-2FA setting. This endpoint takes
+**no request body**.
+
+#### Response Example (200 OK)
+
+```json
+{
+  "requireTwoFactor": false
+}
+```
+
+- **`requireTwoFactor`** (boolean): Whether 2FA is mandatory for all users.
+  Backed by `auth.requireTwoFactor` in `data/config.json` (default `false`).
+
+#### **POST** `/api/admin/settings`
+
+**Full URL**: `http://localhost:3000/api/admin/settings`
+
+**Admin only.** Updates the org-wide enforced-2FA setting. The change takes
+effect immediately and is enforced at the API layer by `src/middleware.ts`
+(see [Configuration: Enforced 2FA](#configuration-enforced-2fa)).
+
+#### Request Body
+
+```json
+{
+  "requireTwoFactor": true
+}
+```
+
+- **`requireTwoFactor`** (boolean, required): The desired setting.
+
+#### Response Example (200 OK)
+
+```json
+{
+  "requireTwoFactor": true
+}
+```
+
+#### Error Handling
+
+- **400**: The body is invalid / missing the `requireTwoFactor` boolean
+  (`"requireTwoFactor (boolean) required."`).
+- **401**: The request is not authenticated.
+- **403**: The authenticated user is not an admin.
+- **500**: An internal server error occurred.
+
+---
+
 ## Two-Factor Authentication (2FA)
 
 Vane supports optional time-based one-time password (TOTP) two-factor
@@ -837,6 +1156,26 @@ UI gates the application behind the enrollment flow ([setup](#begin-2fa-enrollme
 → [enable](#enable-2fa)) until 2FA is active. Public pages (e.g. the login and
 invite pages) are exempt from this gate. When `false` (the default), 2FA is
 opt-in per user.
+
+This is **not** merely a UI gate — it is enforced at the API layer in
+`src/middleware.ts`. When `auth.requireTwoFactor` is enabled, **every** data API
+(all `/api/*` routes) returns the following for an authenticated user who has
+not enrolled 2FA:
+
+```json
+{
+  "message": "Two-factor enrollment required."
+}
+```
+
+with status **`403 Forbidden`**. The only exceptions are:
+
+- **`/api/auth/*`** — always public (the login/refresh/MFA routes).
+- **`/api/account/*`** — exempt so the user can actually enrol (and manage their
+  account) while gated.
+
+This setting is read and written by admins via
+[**GET/POST** `/api/admin/settings`](#get--set-enforced-2fa-setting).
 
 ---
 
