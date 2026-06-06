@@ -875,6 +875,38 @@ effect immediately and is enforced at the API layer by `src/middleware.ts`
 
 ---
 
+## Configuration & Providers (admin)
+
+Once setup is complete — i.e. at least one user account exists — the global app
+configuration is **admin-only**. The full configuration includes model-provider
+API keys, so it is never exposed to non-admins:
+
+- **GET `/api/config`** and **POST `/api/config`** require an authenticated
+  **admin**. A non-admin (or unauthenticated) caller receives **403 Forbidden**
+  (or **401** with no session).
+- **POST `/api/providers`**, **PATCH/DELETE `/api/providers/:id`**, and
+  **POST/DELETE `/api/providers/:id/models`** likewise require an admin. A
+  non-admin receives **403**.
+
+The **read** endpoint for the model picker is intentionally **not** gated:
+
+- **GET `/api/providers`** is available to **any authenticated user**. It returns
+  only the **active model list** — each provider as `id`, `name`, `chatModels`,
+  and `embeddingModels` — with **no secrets** (API keys and other credentials are
+  never included). This is what powers the chat model selector.
+
+### First-run setup
+
+During first-run setup — **before any account exists** — these routes are
+**open**, so the setup wizard can configure providers before an admin has been
+created. They become admin-only as soon as the first admin account is created.
+This is enforced by the `requireAdminUnlessSetup` gate in each handler
+(`src/lib/auth/getAuthUser.ts`): it allows the request through while there are
+zero users, and falls back to the admin check (`401`/`403`) once any user
+exists.
+
+---
+
 ## Two-Factor Authentication (2FA)
 
 Vane supports optional time-based one-time password (TOTP) two-factor

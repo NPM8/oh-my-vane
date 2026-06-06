@@ -1,5 +1,6 @@
 import ModelRegistry from '@/lib/models/registry';
 import { NextRequest } from 'next/server';
+import { requireAdminUnlessSetup } from '@/lib/auth/getAuthUser';
 
 export const GET = async (req: Request) => {
   try {
@@ -34,6 +35,9 @@ export const GET = async (req: Request) => {
 
 export const POST = async (req: NextRequest) => {
   try {
+    const gate = await requireAdminUnlessSetup(req);
+    if (gate instanceof Response) return gate;
+
     const body = await req.json();
     const { type, name, config } = body;
 

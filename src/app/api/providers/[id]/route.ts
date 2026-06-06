@@ -1,11 +1,15 @@
 import ModelRegistry from '@/lib/models/registry';
 import { NextRequest } from 'next/server';
+import { requireAdminUnlessSetup } from '@/lib/auth/getAuthUser';
 
 export const DELETE = async (
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) => {
   try {
+    const gate = await requireAdminUnlessSetup(req);
+    if (gate instanceof Response) return gate;
+
     const { id } = await params;
 
     if (!id) {
@@ -48,6 +52,9 @@ export const PATCH = async (
   { params }: { params: Promise<{ id: string }> },
 ) => {
   try {
+    const gate = await requireAdminUnlessSetup(req);
+    if (gate instanceof Response) return gate;
+
     const body = await req.json();
     const { name, config } = body;
     const { id } = await params;

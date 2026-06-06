@@ -2,6 +2,7 @@ import configManager from '@/lib/config';
 import ModelRegistry from '@/lib/models/registry';
 import { NextRequest, NextResponse } from 'next/server';
 import { ConfigModelProvider } from '@/lib/config/types';
+import { requireAdminUnlessSetup } from '@/lib/auth/getAuthUser';
 
 type SaveConfigBody = {
   key: string;
@@ -10,6 +11,9 @@ type SaveConfigBody = {
 
 export const GET = async (req: NextRequest) => {
   try {
+    const gate = await requireAdminUnlessSetup(req);
+    if (gate instanceof Response) return gate;
+
     const values = configManager.getCurrentConfig();
     const fields = configManager.getUIConfigSections();
 
@@ -44,6 +48,9 @@ export const GET = async (req: NextRequest) => {
 
 export const POST = async (req: NextRequest) => {
   try {
+    const gate = await requireAdminUnlessSetup(req);
+    if (gate instanceof Response) return gate;
+
     const body: SaveConfigBody = await req.json();
 
     if (!body.key || !body.value) {
