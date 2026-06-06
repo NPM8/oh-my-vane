@@ -29,7 +29,16 @@ export const middleware = async (req: NextRequest) => {
   if (!user) {
     return Response.json({ message: 'Unauthorized' }, { status: 401 });
   }
-  if (pathname.startsWith('/api/admin/') && user.role !== 'admin') {
+
+  // Load the live user row once and use it for all downstream checks. This makes
+  // `disabled` and role take effect immediately — the access token alone is not
+  // trusted, so a disabled/deleted user (or revoked admin) loses API access at
+  // once rather than lingering until the access token expires.
+  const row = await getUserById(user.id);
+  if (!row || row.disabled) {
+    return Response.json({ message: 'Unauthorized' }, { status: 401 });
+  }
+  if (pathname.startsWith('/api/admin/') && row.role !== 'admin') {
     return Response.json({ message: 'Forbidden' }, { status: 403 });
   }
 
@@ -40,15 +49,13 @@ export const middleware = async (req: NextRequest) => {
   if (
     !pathname.startsWith('/api/account/') &&
     pathname !== '/api/admin/settings' &&
-    getRequireTwoFactor()
+    getRequireTwoFactor() &&
+    !row.totpEnabled
   ) {
-    const row = await getUserById(user.id);
-    if (row && !row.totpEnabled) {
-      return Response.json(
-        { message: 'Two-factor enrollment required.' },
-        { status: 403 },
-      );
-    }
+    return Response.json(
+      { message: 'Two-factor enrollment required.' },
+      { status: 403 },
+    );
   }
   return pass();
 };
