@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { eq, isNull } from 'drizzle-orm';
 import db from '@/lib/db';
 import { users, chats } from '@/lib/db/schema';
-import { hashPassword } from './password';
+import { hashPassword, verifyPassword } from './password';
 
 export type Role = 'admin' | 'user';
 
@@ -58,4 +58,60 @@ export const claimOrphanChats = async (userId: string): Promise<number> => {
     .set({ userId })
     .where(isNull(chats.userId));
   return (result as unknown as { changes?: number }).changes ?? 0;
+};
+
+export const listUsers = async (): Promise<PublicUser[]> => {
+  const rows = await db
+    .select({
+      id: users.id,
+      username: users.username,
+      role: users.role,
+      disabled: users.disabled,
+      totpEnabled: users.totpEnabled,
+      mustChangePassword: users.mustChangePassword,
+    })
+    .from(users)
+    .orderBy(users.username);
+  return rows as PublicUser[];
+};
+
+export const setUserDisabled = async (
+  id: string,
+  disabled: boolean,
+): Promise<void> => {
+  await db
+    .update(users)
+    .set({ disabled, updatedAt: new Date().toISOString() })
+    .where(eq(users.id, id));
+};
+
+export const deleteUser = async (id: string): Promise<void> => {
+  await db.delete(users).where(eq(users.id, id));
+};
+
+export const adminSetPassword = async (
+  id: string,
+  newPassword: string,
+): Promise<void> => {
+  const passwordHash = await hashPassword(newPassword);
+  await db
+    .update(users)
+    .set({ passwordHash, mustChangePassword: true, updatedAt: new Date().toISOString() })
+    .where(eq(users.id, id));
+};
+
+export const changeOwnPassword = async (
+  id: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<boolean> => {
+  const u = await db.query.users.findFirst({ where: eq(users.id, id) });
+  if (!u) return false;
+  if (!(await verifyPassword(u.passwordHash, currentPassword))) return false;
+  const passwordHash = await hashPassword(newPassword);
+  await db
+    .update(users)
+    .set({ passwordHash, mustChangePassword: false, updatedAt: new Date().toISOString() })
+    .where(eq(users.id, id));
+  return true;
 };
