@@ -10,6 +10,13 @@ import ThemeProvider from '@/components/theme/Provider';
 import configManager from '@/lib/config';
 import SetupWizard from '@/components/Setup/SetupWizard';
 import { ChatProvider } from '@/lib/hooks/useChat';
+import { cookies } from 'next/headers';
+import { countUsers } from '@/lib/auth/users';
+import { verifyJwt } from '@/lib/auth/jwt';
+import { getAuthConfig } from '@/lib/auth/authConfig';
+import { ACCESS_COOKIE } from '@/lib/auth/cookies';
+import Login from '@/components/Auth/Login';
+import BootstrapAdmin from '@/components/Auth/BootstrapAdmin';
 
 const montserrat = Montserrat({
   weight: ['300', '400', '500', '700'],
@@ -23,7 +30,7 @@ export const metadata: Metadata = {
   description: 'Vane is an AI powered answering engine.',
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
@@ -31,27 +38,44 @@ export default function RootLayout({
   const setupComplete = configManager.isSetupComplete();
   const configSections = configManager.getUIConfigSections();
 
+  const userCount = await countUsers();
+  let authed = false;
+  if (userCount > 0) {
+    const token = (await cookies()).get(ACCESS_COOKIE)?.value;
+    if (token) {
+      try {
+        await verifyJwt(token, getAuthConfig().secret, 'access');
+        authed = true;
+      } catch {
+        authed = false;
+      }
+    }
+  }
+
+  const renderGate = () => {
+    if (!setupComplete) return <SetupWizard configSections={configSections} />;
+    if (userCount === 0) return <BootstrapAdmin />;
+    if (!authed) return <Login />;
+    return (
+      <ChatProvider>
+        <Sidebar>{children}</Sidebar>
+        <Toaster
+          toastOptions={{
+            unstyled: true,
+            classNames: {
+              toast:
+                'bg-light-secondary dark:bg-dark-secondary dark:text-white/70 text-black-70 rounded-lg p-4 flex flex-row items-center space-x-2',
+            },
+          }}
+        />
+      </ChatProvider>
+    );
+  };
+
   return (
     <html className="h-full" lang="en" suppressHydrationWarning>
       <body className={cn('h-full antialiased', montserrat.className)}>
-        <ThemeProvider>
-          {setupComplete ? (
-            <ChatProvider>
-              <Sidebar>{children}</Sidebar>
-              <Toaster
-                toastOptions={{
-                  unstyled: true,
-                  classNames: {
-                    toast:
-                      'bg-light-secondary dark:bg-dark-secondary dark:text-white/70 text-black-70 rounded-lg p-4 flex flex-row items-center space-x-2',
-                  },
-                }}
-              />
-            </ChatProvider>
-          ) : (
-            <SetupWizard configSections={configSections} />
-          )}
-        </ThemeProvider>
+        <ThemeProvider>{renderGate()}</ThemeProvider>
       </body>
     </html>
   );
