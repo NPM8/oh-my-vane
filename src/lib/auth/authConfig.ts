@@ -27,6 +27,21 @@ const readStoredSecret = (): string | undefined => {
   }
 };
 
+// Read the require-2FA flag fresh from disk. Like the secret, this is consumed
+// by route handlers, middleware, AND the root layout — separate module
+// instances with independent (stale) configManager snapshots. An admin toggling
+// it via updateConfig in one context would otherwise be invisible to the others
+// (e.g. middleware would never enforce a freshly-enabled policy). Reading the
+// file fresh makes the toggle take effect everywhere immediately.
+export const getRequireTwoFactor = (): boolean => {
+  try {
+    const raw = fs.readFileSync(configFilePath(), 'utf-8');
+    return Boolean(JSON.parse(raw)?.auth?.requireTwoFactor);
+  } catch {
+    return false;
+  }
+};
+
 // Generate + persist a JWT secret if none exists. Call this at startup
 // (instrumentation) where configManager's in-memory config is freshly loaded,
 // so the whole-config rewrite inside updateConfig cannot clobber other state.
@@ -51,8 +66,6 @@ export const getAuthConfig = (): AuthConfig => {
     secret,
     accessTtlMin: Number(configManager.getConfig('auth.accessTtlMin', 120)),
     refreshTtlDays: Number(configManager.getConfig('auth.refreshTtlDays', 30)),
-    requireTwoFactor: Boolean(
-      configManager.getConfig('auth.requireTwoFactor', false),
-    ),
+    requireTwoFactor: getRequireTwoFactor(),
   };
 };

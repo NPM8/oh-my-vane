@@ -13,7 +13,7 @@ import { ChatProvider } from '@/lib/hooks/useChat';
 import { cookies, headers } from 'next/headers';
 import { countUsers, getUserById } from '@/lib/auth/users';
 import { verifyJwt } from '@/lib/auth/jwt';
-import { getAuthConfig } from '@/lib/auth/authConfig';
+import { getAuthConfig, getRequireTwoFactor } from '@/lib/auth/authConfig';
 import { ACCESS_COOKIE } from '@/lib/auth/cookies';
 import Login from '@/components/Auth/Login';
 import BootstrapAdmin from '@/components/Auth/BootstrapAdmin';
@@ -70,9 +70,7 @@ export default async function RootLayout({
   const isPublicPage =
     pathname.startsWith('/invite') || pathname === '/login';
 
-  const requireTwoFactor = Boolean(
-    configManager.getConfig('auth.requireTwoFactor', false),
-  );
+  const requireTwoFactor = getRequireTwoFactor();
   const needsEnroll =
     authed && requireTwoFactor && !authedUser!.totpEnabled && !isPublicPage;
   const needsPasswordChange =
