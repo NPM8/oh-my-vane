@@ -1,12 +1,16 @@
 import ModelRegistry from '@/lib/models/registry';
 import { Model } from '@/lib/models/types';
 import { NextRequest } from 'next/server';
+import { requireAdminUnlessSetup } from '@/lib/auth/getAuthUser';
 
 export const POST = async (
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) => {
   try {
+    const gate = await requireAdminUnlessSetup(req);
+    if (gate instanceof Response) return gate;
+
     const { id } = await params;
 
     const body: Partial<Model> & { type: 'embedding' | 'chat' } =
@@ -53,6 +57,9 @@ export const DELETE = async (
   { params }: { params: Promise<{ id: string }> },
 ) => {
   try {
+    const gate = await requireAdminUnlessSetup(req);
+    if (gate instanceof Response) return gate;
+
     const { id } = await params;
 
     const body: { key: string; type: 'embedding' | 'chat' } = await req.json();
