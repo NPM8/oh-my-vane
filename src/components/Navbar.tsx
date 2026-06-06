@@ -1,4 +1,12 @@
-import { Clock, Edit, Share, Trash, FileText, FileDown } from 'lucide-react';
+import {
+  Clock,
+  Edit,
+  Share,
+  Trash,
+  FileText,
+  FileDown,
+  Link as LinkIcon,
+} from 'lucide-react';
 import { Message } from './ChatWindow';
 import { useEffect, useState, Fragment } from 'react';
 import { formatTimeDifference } from '@/lib/utils';
@@ -282,7 +290,7 @@ const Navbar = () => {
                 }
                 aria-label="Toggle chat sharing"
               >
-                <Share
+                <LinkIcon
                   className={
                     shared ? 'text-[#24A0ED]' : 'text-black/60 dark:text-white/60'
                   }
