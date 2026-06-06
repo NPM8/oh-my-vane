@@ -18,6 +18,7 @@ import { ACCESS_COOKIE } from '@/lib/auth/cookies';
 import Login from '@/components/Auth/Login';
 import BootstrapAdmin from '@/components/Auth/BootstrapAdmin';
 import Force2FA from '@/components/Auth/Force2FA';
+import ForcePasswordChange from '@/components/Auth/ForcePasswordChange';
 
 const montserrat = Montserrat({
   weight: ['300', '400', '500', '700'],
@@ -40,7 +41,11 @@ export default async function RootLayout({
   const configSections = configManager.getUIConfigSections();
 
   const userCount = await countUsers();
-  let authedUser: { id: string; totpEnabled: boolean } | null = null;
+  let authedUser: {
+    id: string;
+    totpEnabled: boolean;
+    mustChangePassword: boolean;
+  } | null = null;
   if (userCount > 0) {
     const token = (await cookies()).get(ACCESS_COOKIE)?.value;
     if (token) {
@@ -48,7 +53,11 @@ export default async function RootLayout({
         const claims = await verifyJwt(token, getAuthConfig().secret, 'access');
         const row = await getUserById(claims.sub);
         if (row && !row.disabled) {
-          authedUser = { id: row.id, totpEnabled: row.totpEnabled };
+          authedUser = {
+            id: row.id,
+            totpEnabled: row.totpEnabled,
+            mustChangePassword: row.mustChangePassword,
+          };
         }
       } catch {
         authedUser = null;
@@ -66,12 +75,16 @@ export default async function RootLayout({
   );
   const needsEnroll =
     authed && requireTwoFactor && !authedUser!.totpEnabled && !isPublicPage;
+  const needsPasswordChange =
+    authed && authedUser!.mustChangePassword && !isPublicPage;
 
   const renderGate = () => {
     if (!setupComplete) return <SetupWizard configSections={configSections} />;
     if (userCount === 0) return <BootstrapAdmin />;
     if (!authed && !isPublicPage) return <Login />;
     if (!authed && isPublicPage) return children;
+    if (needsPasswordChange && pathname !== '/account')
+      return <ForcePasswordChange />;
     if (needsEnroll && pathname !== '/account') return <Force2FA />;
     return (
       <ChatProvider>

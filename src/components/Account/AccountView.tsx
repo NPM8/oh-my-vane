@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { ShieldCheck, ShieldOff } from 'lucide-react';
 import TwoFactorSetup from '../Auth/TwoFactorSetup';
+import PasswordSection from './PasswordSection';
 
 const AccountView = ({ forceEnroll = false }: { forceEnroll?: boolean }) => {
   const [password, setPassword] = useState('');
@@ -40,6 +41,11 @@ const AccountView = ({ forceEnroll = false }: { forceEnroll?: boolean }) => {
           Your administrator requires two-factor authentication. Set it up to continue.
         </p>
       )}
+
+      <section className="border border-light-200 dark:border-dark-200 rounded-xl p-5 flex flex-col space-y-4">
+        <h2 className="text-sm font-medium text-black dark:text-white">Password</h2>
+        <PasswordSection />
+      </section>
 
       <section className="border border-light-200 dark:border-dark-200 rounded-xl p-5 flex flex-col space-y-4">
         <h2 className="text-sm font-medium text-black dark:text-white">Two-factor authentication</h2>
