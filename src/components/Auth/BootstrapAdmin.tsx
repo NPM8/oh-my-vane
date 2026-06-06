@@ -52,6 +52,8 @@ const BootstrapAdmin = () => {
         <input
           type="text"
           autoComplete="username"
+          aria-label="Username"
+          autoFocus
           placeholder="Username"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
@@ -62,6 +64,7 @@ const BootstrapAdmin = () => {
         <input
           type="password"
           autoComplete="new-password"
+          aria-label="Password"
           placeholder="Password (min 10 chars)"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
