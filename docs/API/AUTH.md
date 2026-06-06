@@ -1173,6 +1173,8 @@ with status **`403 Forbidden`**. The only exceptions are:
 - **`/api/auth/*`** — always public (the login/refresh/MFA routes).
 - **`/api/account/*`** — exempt so the user can actually enrol (and manage their
   account) while gated.
+- **`/api/admin/settings`** — exempt so an admin who enables enforcement without
+  having enrolled can still reverse the policy (prevents an admin lockout).
 
 This setting is read and written by admins via
 [**GET/POST** `/api/admin/settings`](#get--set-enforced-2fa-setting).
