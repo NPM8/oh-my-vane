@@ -154,15 +154,20 @@ continuing.
 
 #### Response Example — Two-Factor Required (200 OK)
 
-If the account has two-factor authentication enabled (a Phase 4 feature), the
-endpoint returns the following instead of issuing a session, and **no cookies
-are set**:
+If the account has two-factor authentication enabled, the endpoint returns the
+following instead of issuing a session, and **no cookies are set**:
 
 ```json
 {
-  "mfaRequired": true
+  "mfaRequired": true,
+  "mfaToken": "<short-lived-mfa-jwt>"
 }
 ```
+
+The `mfaToken` is a short-lived (5 minute) JWT that proves the password step
+succeeded. The client must complete login by calling **`POST /api/auth/mfa`**
+with this `mfaToken` and a second-factor `code`. See
+[Two-Factor Authentication (2FA)](#two-factor-authentication-2fa) below.
 
 #### Error Handling
 
@@ -548,6 +553,290 @@ without a separate login step.
 - **409**: The requested username is already taken. This is checked **before**
   the invite is consumed, so the invite is not spent on a duplicate username.
 - **500**: An internal server error occurred.
+
+---
+
+## Two-Factor Authentication (2FA)
+
+Vane supports optional time-based one-time password (TOTP) two-factor
+authentication, compatible with authenticator apps (Google Authenticator, Authy,
+1Password, etc.). When a user has 2FA enabled, logging in becomes a **two-step**
+process: the password step no longer issues a session directly, and a second
+factor must be verified before any session cookies are set.
+
+### Two-step login
+
+When an account has 2FA enabled, **`POST /api/auth/login`** does **not** set the
+session cookies on a correct password. Instead it returns `200` with:
+
+```json
+{
+  "mfaRequired": true,
+  "mfaToken": "<short-lived-mfa-jwt>"
+}
+```
+
+The `mfaToken` is a short-lived JWT (valid for **5 minutes**, `type: "mfa"`)
+that proves the password check passed. The client must then call
+**`POST /api/auth/mfa`** with this token and the user's second factor to finish
+logging in. Only on a successful second-factor verification are the
+`vane_access` and `vane_refresh` cookies set.
+
+Accounts **without** 2FA are unaffected — login sets cookies as documented in
+[Log In](#log-in).
+
+---
+
+### Verify Second Factor (Complete Login)
+
+#### **POST** `/api/auth/mfa`
+
+**Full URL**: `http://localhost:3000/api/auth/mfa`
+
+**Public.** Completes a two-step login. Given the `mfaToken` issued by the login
+endpoint and a valid second factor (`code`), it verifies the factor and, on
+success, issues the session (both auth cookies are set on the response).
+
+#### Request Body
+
+```json
+{
+  "mfaToken": "<short-lived-mfa-jwt>",
+  "code": "123456"
+}
+```
+
+#### Request Parameters
+
+- **`mfaToken`** (string, required): The short-lived MFA JWT returned by
+  `POST /api/auth/login`. Non-empty.
+- **`code`** (string, required): The second factor. **1–32** characters. Either
+  a **6-digit TOTP** code from the user's authenticator app, **or** one of the
+  user's **one-time recovery codes**. A recovery code is consumed (single-use)
+  when accepted.
+
+#### Response Example (200 OK)
+
+```json
+{
+  "user": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "username": "admin",
+    "role": "admin",
+    "mustChangePassword": false
+  }
+}
+```
+
+The `vane_access` and `vane_refresh` cookies are set on the response.
+
+#### Error Handling
+
+- **400**: The request body is malformed or missing fields (`mfaToken` empty, or
+  `code` empty / longer than 32 characters).
+- **401**: Either the `mfaToken` is invalid or expired (returns
+  `"MFA session expired. Sign in again."` — the client should restart login),
+  the account is no longer eligible (disabled, or 2FA no longer enabled), or the
+  submitted `code` is wrong (`"Invalid code."`).
+- **429**: Too many attempts. Second-factor verification is rate limited to
+  **5 attempts per 5 minutes**, keyed by user id. A successful verification
+  resets the counter.
+- **500**: An internal server error occurred.
+
+---
+
+### Begin 2FA Enrollment
+
+#### **POST** `/api/account/2fa/setup`
+
+**Full URL**: `http://localhost:3000/api/account/2fa/setup`
+
+**Authenticated.** Begins enrollment for the **currently authenticated user**. A
+new TOTP secret is generated and stored against the account in a **pending**
+state — 2FA is **not yet active**, and the secret only becomes effective once
+the user confirms it via [Enable 2FA](#enable-2fa). Calling this again before
+enabling replaces the pending secret. This endpoint takes **no request body**.
+
+#### Response Example (200 OK)
+
+```json
+{
+  "secret": "JBSWY3DPEHPK3PXP",
+  "otpauthUri": "otpauth://totp/Vane:admin?secret=JBSWY3DPEHPK3PXP&issuer=Vane",
+  "qrDataUrl": "data:image/png;base64,iVBORw0KGgo..."
+}
+```
+
+#### Response Fields
+
+- **`secret`** (string): The base32 TOTP secret. Show this to the user so they
+  can enter it manually if they cannot scan the QR code.
+- **`otpauthUri`** (string): The `otpauth://` provisioning URI encoding the
+  secret, account, and issuer.
+- **`qrDataUrl`** (string): A `data:` URL (PNG) encoding the `otpauthUri` as a QR
+  code. Render it directly as the `src` of an `<img>` element for the user to
+  scan with their authenticator app.
+
+#### Error Handling
+
+- **401**: The request is not authenticated.
+- **500**: An internal server error occurred.
+
+---
+
+### Enable 2FA
+
+#### **POST** `/api/account/2fa/enable`
+
+**Full URL**: `http://localhost:3000/api/account/2fa/enable`
+
+**Authenticated.** Confirms a pending enrollment for the **currently
+authenticated user** and activates 2FA. The user submits a TOTP `code` generated
+from the pending secret; if it verifies, 2FA is turned on and a fresh set of
+recovery codes is generated and returned.
+
+#### Request Body
+
+```json
+{
+  "code": "123456"
+}
+```
+
+#### Request Parameters
+
+- **`code`** (string, required): The current **6-digit TOTP** code from the
+  authenticator app the user configured during setup. **1–32** characters.
+
+#### Response Example (200 OK)
+
+```json
+{
+  "recoveryCodes": [
+    "abcd-efgh",
+    "ijkl-mnop",
+    "qrst-uvwx",
+    "..."
+  ]
+}
+```
+
+#### Response Fields
+
+- **`recoveryCodes`** (string[]): A list of **10** single-use recovery codes.
+  These are shown **only once** — they are stored hashed and can never be
+  retrieved again. Each code can be used in place of a TOTP code at the
+  [Verify Second Factor](#verify-second-factor-complete-login) step, and is
+  consumed on use. Instruct the user to save them somewhere safe.
+
+#### Error Handling
+
+- **400**: The `code` is missing/empty (`"Code required."`) or does not verify
+  against the pending secret (`"Invalid code. Try again."`). This is also
+  returned if there is no pending secret to confirm.
+- **401**: The request is not authenticated.
+- **500**: An internal server error occurred.
+
+---
+
+### Disable 2FA
+
+#### **POST** `/api/account/2fa/disable`
+
+**Full URL**: `http://localhost:3000/api/account/2fa/disable`
+
+**Authenticated.** Turns off 2FA for the **currently authenticated user**. This
+requires **re-authentication with both** the account password and a current
+second factor, so that a hijacked session alone cannot strip 2FA. On success,
+the TOTP secret and all recovery codes are cleared.
+
+#### Request Body
+
+```json
+{
+  "password": "a-strong-password",
+  "code": "123456"
+}
+```
+
+#### Request Parameters
+
+- **`password`** (string, required): The user's current account password.
+  Non-empty.
+- **`code`** (string, required): A current **6-digit TOTP** code or a one-time
+  **recovery code**. **1–32** characters.
+
+#### Response Example (200 OK)
+
+```json
+{
+  "ok": true
+}
+```
+
+#### Error Handling
+
+- **400**: The request body is malformed or missing `password` / `code`
+  (`"Password and code required."`).
+- **401**: The request is not authenticated, **or** the password or the second
+  factor is incorrect (`"Invalid password or code."` — the message does not
+  distinguish which of the two failed).
+- **500**: An internal server error occurred.
+
+---
+
+### Admin: Reset a User's 2FA
+
+#### **POST** `/api/admin/users/:id/2fa/reset`
+
+**Full URL**: `http://localhost:3000/api/admin/users/<id>/2fa/reset`
+
+**Admin only.** Clears the target user's 2FA configuration — disabling 2FA and
+removing their TOTP secret and recovery codes. Intended for account recovery
+when a user has lost access to their authenticator. After a reset, the user logs
+in with their password alone (a single step) and may re-enroll. This endpoint
+takes **no request body**.
+
+#### Request Parameters
+
+- **`id`** (path, required): The `id` of the user whose 2FA should be reset.
+
+#### Response Example (200 OK)
+
+```json
+{
+  "ok": true
+}
+```
+
+#### Error Handling
+
+- **401**: The request is not authenticated.
+- **403**: The authenticated user is not an admin.
+- **404**: No user matches the given `id` (`"User not found."`).
+- **500**: An internal server error occurred.
+
+---
+
+### Configuration: Enforced 2FA
+
+The boolean **`auth.requireTwoFactor`** (in `data/config.json`, default `false`)
+controls whether 2FA is mandatory for all users:
+
+```json
+{
+  "auth": {
+    "requireTwoFactor": true
+  }
+}
+```
+
+When set to `true`, any authenticated user who has **not** yet enabled 2FA
+(`totpEnabled: false`) is **forced to enroll** before they can use the app — the
+UI gates the application behind the enrollment flow ([setup](#begin-2fa-enrollment)
+→ [enable](#enable-2fa)) until 2FA is active. Public pages (e.g. the login and
+invite pages) are exempt from this gate. When `false` (the default), 2FA is
+opt-in per user.
 
 ---
 
