@@ -40,7 +40,7 @@ describe('invite repository', () => {
     const { rawToken } = await invites.createInvite({ role: 'admin', ttlHours: 48, createdBy: 'a' });
     const first = await invites.consumeInvite(rawToken, 'new-user-1');
     expect(first.ok).toBe(true);
-    expect(first.role).toBe('admin');
+    if (first.ok) expect(first.role).toBe('admin');
     const second = await invites.consumeInvite(rawToken, 'new-user-2');
     expect(second.ok).toBe(false);
   });
