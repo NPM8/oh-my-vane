@@ -1806,4 +1806,22 @@ git commit -m "test(auth): verify phase 2 core auth suite and smoke test"
 - **Spec coverage (Phase 2 scope):** JWT secret resolution + adaptive Secure cookies ✓; short access JWT + rotating opaque refresh with reuse detection ✓; login (rate-limited, no enumeration) ✓; bootstrap first admin + orphan-chat claim (backwards-compat) ✓; logout + current-session ✓; API guard middleware (+ documented fallback) ✓; page gating (setup → bootstrap → login → app) ✓; on-brand mobile UI ✓; `docs/API/AUTH.md` ✓. Invitations (Phase 3), 2FA enrollment/verify (Phase 4), per-user chat scoping + sharing (Phase 5), and admin user management + password reset/force-change (Phase 6) are intentionally out of scope; the login route's `mfaRequired` branch and the `mustChangePassword` field are present but inert until their phases.
 - **Type consistency:** `issueSession` returns `IssuedSession` consumed identically by bootstrap/login/refresh; cookie names come only from `cookies.ts` (`ACCESS_COOKIE`/`REFRESH_COOKIE`); `getAuthConfig()` is the single secret/TTL source; `decideRefresh` actions (`rotate`/`reuse_detected`/`invalid`) match the refresh route's handling.
 - **No placeholders:** every code step contains complete, runnable code. (Task 17 specifies exact doc content to write rather than prose-only.)
-- **Watch-list carried to later phases:** TOTP secret encryption-at-rest, per-process rate-limiter (needs shared store for multi-process), middleware Node-runtime dependency.
+- **Watch-list carried to later phases:** TOTP secret encryption-at-rest, per-process rate-limiter (needs shared store for multi-process), middleware Node-runtime dependency, login timing side-channel (optional dummy-verify on unknown user), bootstrap TOCTOU (DB-unique-index backstopped).
+
+## Implementation note (post-build correction)
+
+During the smoke test, authenticated requests to guarded data APIs returned 401
+even with a valid cookie. Root cause: Next.js loads middleware and route
+handlers as **separate module instances**, each with its own `configManager`
+singleton and `getAuthConfig` cache. With lazy request-time secret generation,
+the middleware context used a different auto-generated secret than the route
+that signed the token. Fix (shipped):
+
+- `ensureJwtSecret()` generates + persists the secret once at startup via
+  `src/instrumentation.ts` (where `configManager`'s in-memory config is fresh).
+- `getAuthConfig()` reads the secret **fresh from `config.json` on each call**
+  (not from the per-context cached/in-memory config), so every runtime context
+  agrees. The `resetAuthConfigCache` export was removed (no longer cached).
+
+Setting `JWT_SECRET` in the environment also resolves this (both contexts read
+the same env value) and is recommended for multi-process deployments.
