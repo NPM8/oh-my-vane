@@ -157,6 +157,16 @@ Logging in with 2FA is a two-step flow: password, then the 6-digit code (a
 recovery code also works). To disable 2FA, re-enter your password and a current
 code on the Account page. If a user is locked out, an admin can **Reset 2FA**.
 
+### Personal preferences (per user)
+
+Each user's **chat model**, **embedding model**, and **system instructions** are
+saved to their account (server-side) and follow them across devices/browsers —
+they are no longer stored only in the browser. Selecting a model from the chat
+input persists it to the account; system instructions are set on the **Account**
+page. A user's preferences are private to that account. (Existing browser
+selections are adopted once on first load, then the account becomes the source
+of truth.)
+
 ---
 
 ## 6. Chats: privacy & sharing
