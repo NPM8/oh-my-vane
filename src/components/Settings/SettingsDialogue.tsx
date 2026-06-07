@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ExternalLink,
   Search,
+  ShieldCheck,
   Sliders,
   ToggleRight,
 } from 'lucide-react';
@@ -16,6 +17,7 @@ import Loader from '../ui/Loader';
 import { cn } from '@/lib/utils';
 import Models from './Sections/Models/Section';
 import SearchSection from './Sections/Search';
+import Admin from './Sections/Admin';
 import Select from '@/components/ui/Select';
 import Personalization from './Sections/Personalization';
 
@@ -51,6 +53,14 @@ const sections = [
     icon: Search,
     component: SearchSection,
     dataAdd: 'search',
+  },
+  {
+    key: 'admin',
+    name: 'Admin',
+    description: 'Manage users, invitations, and security.',
+    icon: ShieldCheck,
+    component: Admin,
+    dataAdd: 'admin',
   },
 ];
 
