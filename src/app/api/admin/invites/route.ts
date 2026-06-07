@@ -26,11 +26,11 @@ export const POST = async (req: NextRequest) => {
       createdBy: auth.id,
     });
 
-    const origin = req.nextUrl.origin;
-    return Response.json(
-      { invite, link: `${origin}/invite/${rawToken}` },
-      { status: 201 },
-    );
+    // Return the raw token (shown once). The client builds the invite link from
+    // its own window.location.origin, so it reflects the externally-reachable
+    // URL the admin is actually using — not the container-internal request
+    // origin (which behind Docker/port-mapping is wrong).
+    return Response.json({ invite, token: rawToken }, { status: 201 });
   } catch (err) {
     console.error('Error creating invite: ', err);
     return Response.json({ message: 'An error has occurred.' }, { status: 500 });

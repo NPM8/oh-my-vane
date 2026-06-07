@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { toast } from 'sonner';
-import { ShieldCheck, Trash, Ban, KeyRound, UserPlus, RotateCcw } from 'lucide-react';
+import { ShieldCheck, Trash, Ban, KeyRound, UserPlus, RotateCcw, Copy } from 'lucide-react';
 
 interface AdminUser {
   id: string;
@@ -24,6 +24,7 @@ const AdminPanel = () => {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [invites, setInvites] = useState<InviteRow[]>([]);
   const [requireTwoFactor, setRequireTwoFactor] = useState(false);
+  const [newInvite, setNewInvite] = useState<{ link: string; expiresAt: string } | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch('/api/admin/users');
@@ -111,12 +112,16 @@ const AdminPanel = () => {
                   }),
                 'Invite created',
               );
-              if (data?.link) {
+              if (data?.token) {
+                // Build the link from the URL the admin is actually on, so it's
+                // reachable by invitees (not the container-internal origin).
+                const link = `${window.location.origin}/invite/${data.token}`;
+                setNewInvite({ link, expiresAt: data.invite?.expiresAt ?? '' });
                 try {
-                  await navigator.clipboard.writeText(data.link);
+                  await navigator.clipboard.writeText(link);
                   toast.success('Invite link copied');
                 } catch {
-                  toast.message(data.link);
+                  // clipboard blocked on plain HTTP — link is shown below to copy manually
                 }
               }
             }}
@@ -125,11 +130,47 @@ const AdminPanel = () => {
             <UserPlus size={15} /> New invite
           </button>
         </div>
+        {newInvite && (
+          <div className="flex flex-col gap-2 p-3 rounded-lg bg-light-secondary dark:bg-dark-secondary">
+            <p className="text-xs text-black/60 dark:text-white/60">
+              Invite link — copy now, shown once
+              {newInvite.expiresAt
+                ? `. Expires ${new Date(newInvite.expiresAt).toLocaleString()}`
+                : ''}
+              :
+            </p>
+            <div className="flex items-center gap-2">
+              <input
+                readOnly
+                value={newInvite.link}
+                onFocus={(e) => e.currentTarget.select()}
+                className="flex-1 px-2 py-1.5 rounded-md bg-light-primary dark:bg-dark-primary text-xs font-mono text-black dark:text-white border border-light-200 dark:border-dark-200"
+              />
+              <button
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(newInvite.link);
+                    toast.success('Copied');
+                  } catch {
+                    toast.error('Copy blocked — select the text and copy manually');
+                  }
+                }}
+                className={btn}
+                title="Copy link"
+                aria-label="Copy invite link"
+              >
+                <Copy size={16} />
+              </button>
+            </div>
+          </div>
+        )}
         <div className="flex flex-col divide-y divide-light-200 dark:divide-dark-200">
           {invites.length === 0 && <p className="text-xs text-black/50 dark:text-white/50">No invites.</p>}
           {invites.map((i) => (
             <div key={i.id} className="flex items-center justify-between py-2 text-sm">
-              <span className="text-black/70 dark:text-white/70">{i.role} · {i.status}</span>
+              <span className="text-black/70 dark:text-white/70">
+                {i.role} · {i.status} · expires {new Date(i.expiresAt).toLocaleString()}
+              </span>
               {i.status === 'pending' && (
                 <button onClick={() => act(() => fetch(`/api/admin/invites/${i.id}`, { method: 'DELETE' }), 'Invite revoked')} className={btn} title="Revoke" aria-label="Revoke invite">
                   <Trash size={16} />
