@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { ShieldCheck, ShieldOff } from 'lucide-react';
 import TwoFactorSetup from '../Auth/TwoFactorSetup';
 import PasswordSection from './PasswordSection';
+import SystemInstructionsSection from './SystemInstructionsSection';
 
 const AccountView = ({ forceEnroll = false }: { forceEnroll?: boolean }) => {
   const [password, setPassword] = useState('');
@@ -64,6 +65,8 @@ const AccountView = ({ forceEnroll = false }: { forceEnroll?: boolean }) => {
           </details>
         )}
       </section>
+
+      {!forceEnroll && <SystemInstructionsSection />}
     </div>
   );
 };
