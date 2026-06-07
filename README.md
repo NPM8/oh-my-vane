@@ -163,6 +163,9 @@ If you prefer to build from source or need more control:
 
 See the [installation documentation](https://github.com/ItzCrazyKns/Vane/tree/master/docs/installation) for more information like updating, etc.
 
+For multi-user accounts, invitations, two-factor authentication, and admin
+management, see the [Authentication & Admin guide](https://github.com/ItzCrazyKns/Vane/tree/master/docs/ADMIN.md).
+
 ### Troubleshooting
 
 #### Local OpenAI-API-Compliant Servers

@@ -8,6 +8,16 @@ services:
     volumes:
       - data:/home/vane/data
     restart: unless-stopped
+    # Authentication config (optional — see docs/ADMIN.md).
+    # The data volume above persists the auto-generated JWT secret, so a single
+    # instance needs nothing here. For production / multi-replica, uncomment:
+    # environment:
+    #   # Stable signing secret (REQUIRED if you run more than one replica).
+    #   # Generate with: openssl rand -base64 48
+    #   - JWT_SECRET=change-me-to-a-random-32+-byte-string
+    #   # Set when serving over HTTPS (e.g. behind a TLS reverse proxy) so auth
+    #   # cookies always get the Secure flag.
+    #   - FORCE_SECURE_COOKIES=true
 
 volumes:
   data:
