@@ -62,6 +62,8 @@ type ChatContext = {
   rewrite: (messageId: string) => void;
   setChatModelProvider: (provider: ChatModelProvider) => void;
   setEmbeddingModelProvider: (provider: EmbeddingModelProvider) => void;
+  systemInstructions: string;
+  setSystemInstructions: (instructions: string) => void;
 };
 
 export interface File {
@@ -85,14 +87,40 @@ const checkConfig = async (
   setEmbeddingModelProvider: (provider: EmbeddingModelProvider) => void,
   setIsConfigReady: (ready: boolean) => void,
   setHasError: (hasError: boolean) => void,
+  setSystemInstructions: (instructions: string) => void,
 ) => {
   try {
-    let chatModelKey = localStorage.getItem('chatModelKey');
-    let chatModelProviderId = localStorage.getItem('chatModelProviderId');
-    let embeddingModelKey = localStorage.getItem('embeddingModelKey');
-    let embeddingModelProviderId = localStorage.getItem(
-      'embeddingModelProviderId',
+    let serverPrefs: {
+      chatModelKey?: string;
+      chatModelProviderId?: string;
+      embeddingModelKey?: string;
+      embeddingModelProviderId?: string;
+      systemInstructions?: string;
+    } = {};
+    try {
+      const r = await fetch('/api/account/preferences');
+      if (r.ok) serverPrefs = (await r.json()).preferences ?? {};
+    } catch {
+      /* fall back to localStorage */
+    }
+
+    setSystemInstructions(
+      serverPrefs.systemInstructions ??
+        localStorage.getItem('systemInstructions') ??
+        '',
     );
+
+    let chatModelKey =
+      serverPrefs.chatModelKey ?? localStorage.getItem('chatModelKey');
+    let chatModelProviderId =
+      serverPrefs.chatModelProviderId ??
+      localStorage.getItem('chatModelProviderId');
+    let embeddingModelKey =
+      serverPrefs.embeddingModelKey ??
+      localStorage.getItem('embeddingModelKey');
+    let embeddingModelProviderId =
+      serverPrefs.embeddingModelProviderId ??
+      localStorage.getItem('embeddingModelProviderId');
 
     const res = await fetch(`/api/providers`, {
       headers: {
@@ -154,6 +182,17 @@ const checkConfig = async (
     localStorage.setItem('chatModelProviderId', chatModelProviderId);
     localStorage.setItem('embeddingModelKey', embeddingModelKey);
     localStorage.setItem('embeddingModelProviderId', embeddingModelProviderId);
+
+    fetch('/api/account/preferences', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chatModelKey,
+        chatModelProviderId,
+        embeddingModelKey,
+        embeddingModelProviderId,
+      }),
+    }).catch(() => {});
 
     setChatModelProvider({
       key: chatModelKey,
@@ -276,6 +315,8 @@ export const chatContext = createContext<ChatContext>({
   setChatModelProvider: () => {},
   setEmbeddingModelProvider: () => {},
   setResearchEnded: () => {},
+  systemInstructions: '',
+  setSystemInstructions: () => {},
 });
 
 export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
@@ -291,6 +332,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
   const [messageAppeared, setMessageAppeared] = useState(false);
 
   const [researchEnded, setResearchEnded] = useState(false);
+
+  const [systemInstructions, setSystemInstructions] = useState('');
 
   const chatHistory = useRef<[string, string][]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -480,6 +523,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
       setEmbeddingModelProvider,
       setIsConfigReady,
       setHasError,
+      setSystemInstructions,
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -788,7 +832,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
           key: embeddingModelProvider.key,
           providerId: embeddingModelProvider.providerId,
         },
-        systemInstructions: localStorage.getItem('systemInstructions'),
+        systemInstructions,
       }),
     });
 
@@ -869,6 +913,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         setEmbeddingModelProvider,
         researchEnded,
         setResearchEnded,
+        systemInstructions,
+        setSystemInstructions,
       }}
     >
       {children}

@@ -115,3 +115,29 @@ export const changeOwnPassword = async (
     .where(eq(users.id, id));
   return true;
 };
+
+export interface UserPreferences {
+  chatModelKey?: string;
+  chatModelProviderId?: string;
+  embeddingModelKey?: string;
+  embeddingModelProviderId?: string;
+  systemInstructions?: string;
+}
+
+export const getUserPreferences = async (id: string): Promise<UserPreferences> => {
+  const u = await db.query.users.findFirst({ where: eq(users.id, id) });
+  return (u?.preferences as UserPreferences | null) ?? {};
+};
+
+export const setUserPreferences = async (
+  id: string,
+  patch: UserPreferences,
+): Promise<UserPreferences> => {
+  const current = await getUserPreferences(id);
+  const merged = { ...current, ...patch };
+  await db
+    .update(users)
+    .set({ preferences: merged, updatedAt: new Date().toISOString() })
+    .where(eq(users.id, id));
+  return merged;
+};

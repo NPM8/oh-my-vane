@@ -60,6 +60,15 @@ const ModelSelector = () => {
     setChatModelProvider({ providerId, key: modelKey });
     localStorage.setItem('chatModelProviderId', providerId);
     localStorage.setItem('chatModelKey', modelKey);
+
+    fetch('/api/account/preferences', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chatModelProviderId: providerId,
+        chatModelKey: modelKey,
+      }),
+    }).catch(() => {});
   };
 
   const filteredProviders = orderedProviders
