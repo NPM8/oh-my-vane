@@ -17,6 +17,9 @@ RUN yarn build
 
 FROM node:24.5.0-slim
 
+# python3 is required: the `yarn add playwright` step below re-runs install
+# scripts, and better-sqlite3 recompiles via node-gyp (needs Python). sqlite3
+# CLI kept for parity/debugging.
 RUN apt-get update && apt-get install -y python3 python3-pip sqlite3 && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /home/vane
@@ -30,8 +33,10 @@ COPY drizzle ./drizzle
 
 RUN mkdir /home/vane/uploads
 
-RUN yarn add playwright
-RUN yarn playwright install --with-deps --only-shell chromium
+RUN yarn add playwright \
+    && yarn playwright install --with-deps --only-shell chromium \
+    && yarn cache clean \
+    && rm -rf /var/lib/apt/lists/*
 
 EXPOSE 3000
 
