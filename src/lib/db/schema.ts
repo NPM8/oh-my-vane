@@ -55,6 +55,13 @@ export const users = sqliteTable('users', {
     .notNull()
     .default(false),
   recoveryCodes: text('recoveryCodes', { mode: 'json' }).$type<string[]>(),
+  preferences: text('preferences', { mode: 'json' }).$type<{
+    chatModelKey?: string;
+    chatModelProviderId?: string;
+    embeddingModelKey?: string;
+    embeddingModelProviderId?: string;
+    systemInstructions?: string;
+  }>(),
   createdAt: text('createdAt').notNull(),
   updatedAt: text('updatedAt').notNull(),
 });
