@@ -342,13 +342,15 @@ It can never be retrieved again afterwards.
     "usedBy": null,
     "createdAt": "2026-06-06T12:00:00.000Z"
   },
-  "link": "http://localhost:3000/invite/<rawToken>"
+  "token": "<rawToken>"
 }
 ```
 
-The `link` is `${origin}/invite/<rawToken>`, where `origin` is derived from the
-request URL. The raw token appears **only** in this `link` and is never returned
-again.
+The response returns the raw `token` (shown **only once**, never returned
+again). The client builds the invite link as
+`${window.location.origin}/invite/<token>` — using the browser's own origin so
+the link reflects the externally-reachable URL the admin is using, rather than
+the container-internal request origin.
 
 #### Error Handling
 
