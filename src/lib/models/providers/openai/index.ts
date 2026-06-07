@@ -6,6 +6,7 @@ import BaseEmbedding from '../../base/embedding';
 import BaseModelProvider from '../../base/provider';
 import BaseLLM from '../../base/llm';
 import OpenAILLM from './openaiLLM';
+import { classifyOpenAIModels } from './classify';
 
 interface OpenAIConfig {
   apiKey: string;
@@ -136,17 +137,49 @@ class OpenAIProvider extends BaseModelProvider<OpenAIConfig> {
   }
 
   async getDefaultModels(): Promise<ModelList> {
-    if (this.config.baseURL === 'https://api.openai.com/v1') {
+    // Query the provider's OpenAI-compatible `/models` endpoint live. This works
+    // for OpenAI, OpenRouter, and any OpenAI-compatible endpoint, so the model
+    // list reflects what the key can actually reach (previously OpenAI used a
+    // frozen hardcoded list and any other baseURL — e.g. OpenRouter — returned
+    // nothing). The curated list below is only a fallback for official OpenAI
+    // when the request fails.
+    try {
+      const base = this.config.baseURL.replace(/\/+$/, '');
+      const res = await fetch(`${base}/models`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.config.apiKey}`,
+        },
+      });
+      if (!res.ok) {
+        throw new Error(`Model list request failed with status ${res.status}`);
+      }
+      const data = await res.json();
+      const ids: string[] = Array.isArray(data?.data)
+        ? data.data.map((m: any) => m?.id)
+        : [];
+      const classified = classifyOpenAIModels(ids);
+      if (classified.chat.length === 0 && classified.embedding.length === 0) {
+        throw new Error('Model list response contained no usable models');
+      }
+      return classified;
+    } catch (err) {
+      console.error(
+        'Failed to fetch OpenAI-compatible model list, using fallback:',
+        err,
+      );
+      if (this.config.baseURL === 'https://api.openai.com/v1') {
+        return {
+          embedding: defaultEmbeddingModels,
+          chat: defaultChatModels,
+        };
+      }
       return {
-        embedding: defaultEmbeddingModels,
-        chat: defaultChatModels,
+        embedding: [],
+        chat: [],
       };
     }
-
-    return {
-      embedding: [],
-      chat: [],
-    };
   }
 
   async getModelList(): Promise<ModelList> {
