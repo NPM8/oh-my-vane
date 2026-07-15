@@ -23,6 +23,20 @@ export const findRefreshByToken = async (rawToken: string) =>
     where: eq(refreshTokens.tokenHash, hashToken(rawToken)),
   });
 
+// Slide a still-valid refresh row's expiry forward WITHOUT rotating it. Used by
+// the silent-refresh path so active use keeps a session alive indefinitely
+// instead of hard-capping at refreshTtlDays from the original login. Guarded on
+// `revokedAt IS NULL` so it can never resurrect a revoked/reused token. Safe
+// under concurrency: several requests each set expiresAt to ~the same value
+// (last write wins); it never touches the token hash or revokedAt, so it does
+// not trip reuse-detection the way rotation would.
+export const touchRefreshExpiry = async (id: string, expiresAt: string) => {
+  await db
+    .update(refreshTokens)
+    .set({ expiresAt })
+    .where(and(eq(refreshTokens.id, id), isNull(refreshTokens.revokedAt)));
+};
+
 export const revokeRefresh = async (id: string, replacedBy?: string) => {
   await db
     .update(refreshTokens)

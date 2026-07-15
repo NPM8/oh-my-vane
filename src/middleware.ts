@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthUser } from '@/lib/auth/getAuthUser';
+import { getAuthUser, type AuthUser } from '@/lib/auth/getAuthUser';
 import { countUsers, getUserById } from '@/lib/auth/users';
 import { getRequireTwoFactor } from '@/lib/auth/authConfig';
+import { silentRefresh } from '@/lib/auth/silentRefresh';
+import {
+  ACCESS_COOKIE,
+  REFRESH_COOKIE,
+  buildCookieOptions,
+  isSecureRequest,
+} from '@/lib/auth/cookies';
 
 export const runtime = 'nodejs';
 
@@ -11,13 +18,74 @@ const PUBLIC_API = ['/api/auth/'];
 export const middleware = async (req: NextRequest) => {
   const { pathname } = req.nextUrl;
 
+  // Resolve the caller from the access token. When it is missing/expired but a
+  // valid refresh cookie is still present, mint a fresh access token (mint-only,
+  // no rotation — see silentRefresh) and (a) inject it into the forwarded request
+  // so the same-pass RSC layout gate sees an authenticated user, and (b) set it
+  // on the response so the browser carries it forward. This keeps the session
+  // alive up to the refresh token's lifetime instead of logging the user out the
+  // moment the short-lived access token expires — covering page loads AND APIs.
+  let user: AuthUser | null = await getAuthUser(req);
+  let refreshedAccess: string | null = null;
+  let refreshedMaxAge = 0;
+  let refreshedRefresh: string | null = null;
+  let refreshedRefreshMaxAge = 0;
+  if (!user) {
+    const refreshed = await silentRefresh(
+      req.cookies.get(REFRESH_COOKIE)?.value,
+      Date.now(),
+    );
+    if (refreshed) {
+      user = refreshed.user;
+      refreshedAccess = refreshed.accessToken;
+      refreshedMaxAge = refreshed.accessMaxAgeSec;
+      // Same (unrotated) refresh token with a fresh maxAge — slides the browser
+      // cookie's expiry forward in step with the DB row (see silentRefresh).
+      refreshedRefresh = refreshed.refreshToken;
+      refreshedRefreshMaxAge = refreshed.refreshMaxAgeSec;
+      // Update the forwarded request so downstream (RSC layout, route handlers)
+      // observe the freshly-minted access token within this same request.
+      req.cookies.set(ACCESS_COOKIE, refreshed.accessToken);
+    }
+  }
+
   // Propagate the pathname so the root-layout auth gate can identify public
-  // page routes (/invite, /login) and render them while logged out.
+  // page routes (/invite, /login) and render them while logged out. Built AFTER
+  // any cookie injection above so the new access cookie rides along.
   const requestHeaders = new Headers(req.headers);
   requestHeaders.set('x-vane-pathname', pathname);
-  const pass = () => NextResponse.next({ request: { headers: requestHeaders } });
 
-  // Page routes: just propagate the header, no API guard here.
+  const pass = () => {
+    const res = NextResponse.next({ request: { headers: requestHeaders } });
+    if (refreshedAccess) {
+      const secure = isSecureRequest(req.headers.get('x-forwarded-proto'));
+      const forceSecure = process.env.FORCE_SECURE_COOKIES === 'true';
+      res.cookies.set(
+        ACCESS_COOKIE,
+        refreshedAccess,
+        buildCookieOptions({
+          maxAgeSeconds: refreshedMaxAge,
+          isSecureRequest: secure,
+          forceSecure,
+        }),
+      );
+      if (refreshedRefresh) {
+        res.cookies.set(
+          REFRESH_COOKIE,
+          refreshedRefresh,
+          buildCookieOptions({
+            maxAgeSeconds: refreshedRefreshMaxAge,
+            isSecureRequest: secure,
+            forceSecure,
+          }),
+        );
+      }
+    }
+    return res;
+  };
+
+  // Page routes: no API guard here (the root-layout gate enforces auth). We
+  // still fall through to pass() so a silently-refreshed access cookie is set.
   if (!pathname.startsWith('/api/')) return pass();
   if (PUBLIC_API.some((p) => pathname.startsWith(p))) return pass();
 
@@ -25,7 +93,6 @@ export const middleware = async (req: NextRequest) => {
   // setup/bootstrap phase — allow API access so setup can complete.
   if ((await countUsers()) === 0) return pass();
 
-  const user = await getAuthUser(req);
   if (!user) {
     return Response.json({ message: 'Unauthorized' }, { status: 401 });
   }
