@@ -4,10 +4,18 @@ services:
     build:
       context: .
     ports:
-      - '3000:3000'
+      - '127.0.0.1:8090:3000'
+      - '100.94.95.76:8090:3000'
     volumes:
       - data:/home/vane/data
     restart: unless-stopped
+    environment:
+      # Next standalone binds to $HOSTNAME; with multiple networks the container
+      # hostname resolves to only one of them, breaking the published port.
+      - HOSTNAME=0.0.0.0
+    networks:
+      - default
+      - searxng
     # Authentication config (optional — see docs/ADMIN.md).
     # The data volume above persists the auto-generated JWT secret, so a single
     # instance needs nothing here. For production / multi-replica, uncomment:
@@ -18,6 +26,11 @@ services:
     #   # Set when serving over HTTPS (e.g. behind a TLS reverse proxy) so auth
     #   # cookies always get the Secure flag.
     #   - FORCE_SECURE_COOKIES=true
+
+networks:
+  searxng:
+    external: true
+    name: searxng_default
 
 volumes:
   data:
