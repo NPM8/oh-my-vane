@@ -1,0 +1,13 @@
+# User unit example: Docker gateway must exist before this can bind.
+[Unit]
+Description=Vane Docker gateway bridge to loopback Bonsai
+After=bonsai.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 %h/projects/oh-my-vane/local/bonsai/vane_bridge_proxy.py
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

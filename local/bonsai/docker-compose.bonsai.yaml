@@ -1,0 +1,9 @@
+# Optional provider settings; use with the repository's base Compose file:
+# docker compose -f docker-compose.yaml -f local/bonsai/docker-compose.bonsai.yaml up -d --no-deps vane
+services:
+  vane:
+    environment:
+      # Match the inspected Docker gateway and restricted bridge endpoint.
+      - OPENAI_BASE_URL=${BONSAI_OPENAI_BASE_URL:-http://172.22.0.1:8084/v1}
+      # Non-secret placeholder required by the OpenAI client, not authentication.
+      - OPENAI_API_KEY=local-bonsai-placeholder

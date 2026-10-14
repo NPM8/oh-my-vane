@@ -1,0 +1,14 @@
+# User unit example: review paths and prerequisites before installing.
+[Unit]
+Description=Bonsai 2 27B loopback inference server
+
+[Service]
+Type=simple
+Environment=BONSAI_DIR=%h/projects/Bonsai-demo
+Environment=CUDA_VISIBLE_DEVICES=0
+ExecStart=/bin/sh %h/projects/oh-my-vane/local/bonsai/start-bonsai.sh
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

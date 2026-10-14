@@ -41,3 +41,12 @@ db.sqlite
 certificates
 # TypeScript build info
 tsconfig.tsbuildinfo
+
+# Local inference runtime, backups, and generated verification reports
+/data/
+*.gguf
+.venv/
+**/__pycache__/
+/local/bonsai/*before*
+/local/bonsai/verification*.json
+/local/bonsai/*.log
